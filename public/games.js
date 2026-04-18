@@ -101,14 +101,64 @@ let crashAwaitingBet = false;
 let crashAwaitingCashout = false;
 let crashAutoCashout = 0;
 let crashUiTicker = null;
-const CRASH_EDGE = 0.94;
-const DICE_EDGE = 0.93;
-const COINFLIP_PAYOUT = 1.9;
-const LIMBO_EDGE = 0.93;
-const MINES_STEP_MULTIPLIER = 0.18;
+const CRASH_EDGE = 0.86;
+const DICE_EDGE = 0.86;
+const COINFLIP_PAYOUT = 1.78;
+const LIMBO_EDGE = 0.84;
+const GAME_COOLDOWN_MS = 900;
+const LONG_GAME_COOLDOWN_MS = 1400;
+const CRASH_MAX_MULTIPLIER = 80;
+const LIMBO_MAX_TARGET = 25;
+const MINES_EDGE = 0.86;
 const TOWERS_STEP_MULTIPLIER = 0.24;
 const BLACKJACK_NATURAL_PAYOUT = 2.2;
-const KENO_PAYOUTS = { 5: 1.4, 6: 2.5, 7: 4.5, 8: 9, 9: 18, 10: 36 };
+const KENO_PAYOUTS = { 5: 1.15, 6: 1.8, 7: 3.2, 8: 6.4, 9: 12, 10: 24 };
+const SLOTS_PAYTABLE = {
+    'ðŸ’': 2,
+    'ðŸ‹': 4,
+    'ðŸŠ': 6,
+    'ðŸ‡': 9,
+    'ðŸ’Ž': 14,
+    '7ï¸âƒ£': 24
+};
+const GAME_ACTION_BUSY = new Set();
+const GAME_ACTION_COOLDOWNS = new Map();
+
+function clampMultiplier(value, maxMultiplier) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return 1;
+    }
+
+    return Math.max(1, Math.min(maxMultiplier, parsed));
+}
+
+function rollInverseMultiplier(edge, maxMultiplier) {
+    return clampMultiplier(edge / Math.max(0.0001, 1 - Math.random()), maxMultiplier);
+}
+
+function startGameAction(actionKey, cooldownMs = GAME_COOLDOWN_MS) {
+    const now = performance.now();
+    const nextAllowed = GAME_ACTION_COOLDOWNS.get(actionKey) || 0;
+
+    if (GAME_ACTION_BUSY.has(actionKey)) {
+        showNotification('Finish the current round first.', 'info');
+        return false;
+    }
+
+    if (now < nextAllowed) {
+        showNotification('Slow down a bit before starting another round.', 'info');
+        return false;
+    }
+
+    GAME_ACTION_BUSY.add(actionKey);
+    return true;
+}
+
+function finishGameAction(actionKey, cooldownMs = GAME_COOLDOWN_MS) {
+    GAME_ACTION_BUSY.delete(actionKey);
+    GAME_ACTION_COOLDOWNS.set(actionKey, performance.now() + cooldownMs);
+}
 
 function initCrashGame() {
     crashCanvas = document.getElementById('crashCanvas');
@@ -173,15 +223,15 @@ function formatCrashCountdown(targetTimestamp) {
 
 function normalizeCrashHistory(history = []) {
     return history.map((entry) => ({
-        multiplier: Number(entry.multiplier || 1),
-        won: Number(entry.multiplier || 1) >= 2,
+        multiplier: clampMultiplier(entry.multiplier || 1, CRASH_MAX_MULTIPLIER),
+        won: clampMultiplier(entry.multiplier || 1, CRASH_MAX_MULTIPLIER) >= 2,
         timestamp: entry.timestamp || Date.now()
     }));
 }
 
 function syncCrashGraphState(state) {
     const phase = state?.phase || 'betting';
-    const nextMultiplier = Number(state?.multiplier || state?.crashPoint || 1);
+    const nextMultiplier = clampMultiplier(state?.multiplier || state?.crashPoint || 1, CRASH_MAX_MULTIPLIER);
 
     if (crashPreviousPhase !== phase) {
         if (phase === 'betting') {
@@ -192,7 +242,7 @@ function syncCrashGraphState(state) {
             crashGraphData = [1];
             crashMultiplier = 1;
         } else if (phase === 'crashed') {
-            crashMultiplier = Number(state?.crashPoint || nextMultiplier || 1);
+            crashMultiplier = clampMultiplier(state?.crashPoint || nextMultiplier || 1, CRASH_MAX_MULTIPLIER);
             crashPoint = crashMultiplier;
             crashGraphData.push(crashMultiplier);
             createCrashParticles(crashCanvas ? crashCanvas.width / 2 : 400, crashCanvas ? crashCanvas.height / 2 : 230, '239, 68, 68');
@@ -251,8 +301,16 @@ function handleCrashBetSettlement(payload) {
     crashBetAmount = 0;
     crashAutoCashout = 0;
 
-    const multiplier = Number(payload.multiplier || crashSharedState?.crashPoint || 0);
+    const amount = Number(payload.amount || 0);
+    const payout = Number(payload.payout || 0);
+    const multiplier = clampMultiplier(payload.multiplier || crashSharedState?.crashPoint || 1, CRASH_MAX_MULTIPLIER);
     const profit = Number(payload.profit || 0);
+
+    if (amount <= 0 && payout <= 0 && profit === 0) {
+        updateCrashPanel();
+        drawCrashGraph();
+        return;
+    }
 
     if (payload.resultType === 'crash') {
         createCrashParticles(crashCanvas ? crashCanvas.width / 2 : 400, crashCanvas ? crashCanvas.height / 2 : 230, '239, 68, 68');
@@ -273,6 +331,7 @@ function drawCrashGraph() {
     
     const width = crashCanvas.width;
     const height = crashCanvas.height;
+    const visibleMaxMultiplier = Math.max(6, Math.min(CRASH_MAX_MULTIPLIER, Math.ceil(Math.max(...crashGraphData, crashMultiplier, 6))));
     
     // Clear canvas
     crashCtx.fillStyle = '#0f172a';
@@ -304,7 +363,7 @@ function drawCrashGraph() {
     crashCtx.textAlign = 'right';
     
     for (let i = 0; i <= 10; i++) {
-        const mult = (i * 0.5 + 1).toFixed(1);
+        const mult = (1 + ((visibleMaxMultiplier - 1) * i) / 10).toFixed(1);
         const y = height - (i * height / 10);
         crashCtx.fillText(mult + 'x', 35, y + 4);
     }
@@ -334,8 +393,8 @@ function drawCrashGraph() {
         
         for (let i = 0; i < crashGraphData.length; i++) {
             const x = (i / crashGraphData.length) * width;
-            const mult = crashGraphData[i];
-            const y = height - ((mult - 1) / 10) * height;
+            const mult = clampMultiplier(crashGraphData[i], CRASH_MAX_MULTIPLIER);
+            const y = height - ((mult - 1) / Math.max(1, visibleMaxMultiplier - 1)) * height;
             
             if (i === 0) {
                 crashCtx.moveTo(x, y);
@@ -424,13 +483,14 @@ function updateCrashPanel() {
 
     if (isBetaMode) {
         overlay.style.color = '';
-        overlay.textContent = `${crashMultiplier.toFixed(2)}x`;
+        const betaMultiplier = clampMultiplier(crashMultiplier, CRASH_MAX_MULTIPLIER);
+        overlay.textContent = `${betaMultiplier.toFixed(2)}x`;
         if (status) status.textContent = crashGameRunning ? 'Live beta round' : 'Ready';
         if (timer) timer.textContent = crashGameRunning ? 'Live' : '--';
         if (currentBet) currentBet.textContent = `$${formatAmount(crashBetAmount)}`;
-        if (potentialWin) potentialWin.textContent = `$${formatAmount(crashBetAmount * crashMultiplier)}`;
-        if (profit) profit.textContent = `$${formatAmount(crashBetAmount * Math.max(0, crashMultiplier - 1))}`;
-        if (cashoutAmount) cashoutAmount.textContent = `$${formatAmount(crashBetAmount * crashMultiplier)}`;
+        if (potentialWin) potentialWin.textContent = `$${formatAmount(crashBetAmount * betaMultiplier)}`;
+        if (profit) profit.textContent = `$${formatAmount(crashBetAmount * Math.max(0, betaMultiplier - 1))}`;
+        if (cashoutAmount) cashoutAmount.textContent = `$${formatAmount(crashBetAmount * betaMultiplier)}`;
 
         if (crashGameRunning && crashBetAmount > 0) {
             betButton.style.display = 'none';
@@ -446,7 +506,7 @@ function updateCrashPanel() {
     }
 
     const state = crashSharedState || { phase: 'betting', multiplier: 1, bettingClosesAt: null, activeBet: null };
-    const liveMultiplier = Number(state.phase === 'crashed' ? (state.crashPoint || state.multiplier || 1) : (state.multiplier || 1));
+    const liveMultiplier = clampMultiplier(state.phase === 'crashed' ? (state.crashPoint || state.multiplier || 1) : (state.multiplier || 1), CRASH_MAX_MULTIPLIER);
     const activeBetAmount = crashBetActive ? crashBetAmount : Number(state.activeBet?.amount || 0);
     const projectedPayout = activeBetAmount > 0 ? activeBetAmount * liveMultiplier : 0;
     const projectedProfit = activeBetAmount > 0 ? projectedPayout - activeBetAmount : 0;
@@ -502,7 +562,7 @@ function updateCrashPanel() {
     if (countdownBanner) {
         countdownBanner.classList.remove('active');
     }
-    if (status) status.textContent = `Crashed at ${(state.crashPoint || state.multiplier || 1).toFixed(2)}x`;
+    if (status) status.textContent = `Crashed at ${liveMultiplier.toFixed(2)}x`;
     if (timer) timer.textContent = 'Resetting';
     betButton.style.display = 'inline-flex';
     betButton.disabled = true;
@@ -524,6 +584,20 @@ function startCrashBet() {
         return;
     }
 
+    if (!isBetaMode && (!crashSharedState || crashSharedState.phase !== 'betting')) {
+        showNotification('Crash betting window is closed. Wait for the next round.', 'error');
+        return;
+    }
+
+    if (!isBetaMode && (crashBetActive || crashAwaitingBet)) {
+        showNotification('Your crash bet is already in this round.', 'info');
+        return;
+    }
+
+    if (!startGameAction('crash', isBetaMode ? LONG_GAME_COOLDOWN_MS : GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     if (isBetaMode) {
         crashBetAmount = amount;
         crashBetActive = true;
@@ -535,15 +609,13 @@ function startCrashBet() {
         crashGraphData = [1.00];
         crashStartTime = Date.now();
 
-        const random = Math.random();
-        crashPoint = Math.max(1.01, 1 / (1 - random * CRASH_EDGE));
-        crashPoint = Math.min(crashPoint, 80);
+        crashPoint = rollInverseMultiplier(CRASH_EDGE, CRASH_MAX_MULTIPLIER);
 
         let speed = 0.01;
 
         crashInterval = setInterval(() => {
             speed += 0.0005;
-            crashMultiplier += speed;
+            crashMultiplier = clampMultiplier(crashMultiplier + speed, CRASH_MAX_MULTIPLIER);
             crashGraphData.push(crashMultiplier);
 
             if (crashGraphData.length > 100) {
@@ -563,15 +635,6 @@ function startCrashBet() {
 
         drawCrashGraph();
         updateCrashPanel();
-        return;
-    }
-
-    if (!crashSharedState || crashSharedState.phase !== 'betting') {
-        showNotification('Crash betting window is closed. Wait for the next round.', 'error');
-        return;
-    }
-
-    if (crashBetActive || crashAwaitingBet) {
         return;
     }
 
@@ -611,6 +674,7 @@ function startCrashBet() {
             showNotification(error.message || 'Could not place crash bet', 'error');
         })
         .finally(() => {
+            finishGameAction('crash');
             crashAwaitingBet = false;
             updateCrashPanel();
         });
@@ -657,6 +721,7 @@ async function crashEnd(won) {
 
     crashBetActive = false;
     crashGameRunning = false;
+    finishGameAction('crash', LONG_GAME_COOLDOWN_MS);
     clearInterval(crashInterval);
 
     const payout = won ? crashBetAmount * crashMultiplier : 0;
@@ -677,7 +742,7 @@ async function crashEnd(won) {
     if (won) {
         const profit = payout - crashBetAmount;
         createCrashParticles(crashCanvas ? crashCanvas.width / 2 : 400, crashCanvas ? crashCanvas.height / 2 : 230, '16, 185, 129');
-        showNotification(`Cashed out at ${crashMultiplier.toFixed(2)}x! Won $${formatAmount(profit)}`, 'success');
+        showNotification(`Cashed out at ${clampMultiplier(crashMultiplier, CRASH_MAX_MULTIPLIER).toFixed(2)}x! Won $${formatAmount(profit)}`, 'success');
         crashHistory.unshift({ multiplier: crashMultiplier, won: true });
         updateCrashHistory();
     } else {
@@ -685,7 +750,7 @@ async function crashEnd(won) {
         createCrashParticles(crashCanvas ? crashCanvas.width / 2 : 400, crashCanvas ? crashCanvas.height / 2 : 230, '239, 68, 68');
         
         document.getElementById('crashMultiplierOverlay').style.color = '#ef4444';
-        showNotification(`Crashed at ${crashMultiplier.toFixed(2)}x! Lost $${formatAmount(crashBetAmount)}`, 'error');
+        showNotification(`Crashed at ${clampMultiplier(crashMultiplier, CRASH_MAX_MULTIPLIER).toFixed(2)}x! Lost $${formatAmount(crashBetAmount)}`, 'error');
         
         crashHistory.unshift({ multiplier: crashMultiplier, won: false });
         updateCrashHistory();
@@ -786,6 +851,25 @@ let minesBetAmount = 0;
 let minesRevealed = 0;
 let minesPositions = [];
 let minesMultiplier = 1.00;
+let minesCountActive = 3;
+
+function getMinesSurvivalChance(revealed, minesCount) {
+    let chance = 1;
+
+    for (let step = 0; step < revealed; step += 1) {
+        chance *= (25 - minesCount - step) / (25 - step);
+    }
+
+    return Math.max(0.0001, chance);
+}
+
+function getMinesMultiplier(revealed, minesCount) {
+    if (revealed <= 0) {
+        return 1;
+    }
+
+    return Math.round(Math.min(6.5, Math.max(0.25, MINES_EDGE / getMinesSurvivalChance(revealed, minesCount))) * 100) / 100;
+}
 
 function createMinesGrid() {
     const grid = document.getElementById('minesGrid');
@@ -813,7 +897,7 @@ function createMinesGrid() {
 
 function startMinesGame() {
     const amount = readAmountInput('minesBetAmount');
-    const minesCount = parseInt(document.getElementById('minesCount').value);
+    const minesCount = Math.max(1, Math.min(24, parseInt(document.getElementById('minesCount').value, 10) || 3));
     
     if (!amount || amount <= 0) {
         showNotification('Enter a valid bet amount', 'error');
@@ -824,11 +908,16 @@ function startMinesGame() {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (minesGameActive || !startGameAction('mines', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     minesBetAmount = amount;
     minesGameActive = true;
     minesRevealed = 0;
     minesMultiplier = 1.00;
+    minesCountActive = minesCount;
     playGameSound('bet-place');
     reserveDisplayedBalance(amount);
     
@@ -861,7 +950,7 @@ function revealMinesTile(index, tile) {
         tile.textContent = '💎';
         tile.style.background = 'var(--accent-success)';
         minesRevealed++;
-        minesMultiplier = 1 + (minesRevealed * MINES_STEP_MULTIPLIER);
+        minesMultiplier = getMinesMultiplier(minesRevealed, minesCountActive);
         document.getElementById('minesMultiplier').textContent = minesMultiplier.toFixed(2) + 'x';
         playGameSound('reveal');
     }
@@ -875,6 +964,7 @@ function minesCashout() {
 
 async function minesGameEnd(won) {
     minesGameActive = false;
+    finishGameAction('mines', LONG_GAME_COOLDOWN_MS);
 
     const payout = won ? minesBetAmount * minesMultiplier : 0;
     const settlement = await settleWager({
@@ -973,6 +1063,10 @@ async function rollDice() {
         return;
     }
 
+    if (!startGameAction('dice')) {
+        return;
+    }
+
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
     }
@@ -1008,6 +1102,7 @@ async function finishDiceRoll(amount, rollOver) {
         });
 
         if (!settlement) {
+            finishGameAction('dice');
             return;
         }
     } else {
@@ -1018,6 +1113,7 @@ async function finishDiceRoll(amount, rollOver) {
         });
 
         if (!playResult) {
+            finishGameAction('dice');
             return;
         }
 
@@ -1044,6 +1140,7 @@ async function finishDiceRoll(amount, rollOver) {
         document.getElementById('diceResult').textContent = '🎲';
         document.getElementById('diceStatus').textContent = 'Roll the dice!';
     }, 3000);
+    finishGameAction('dice');
 }
 
 // ===== PLINKO GAME =====
@@ -1053,26 +1150,26 @@ const MAX_PLINKO_ROWS = 16;
 const PLINKO_RISK_CONFIG = {
     low: {
         label: 'Low Risk',
-        targetEv: 0.94,
-        centerFloor: 0.62,
-        edgeBase: 4.2,
-        edgeGrowth: 0.24,
+        targetEv: 0.86,
+        centerFloor: 0.58,
+        edgeBase: 3.4,
+        edgeGrowth: 0.18,
         curve: 1.34
     },
     medium: {
         label: 'Medium Risk',
-        targetEv: 0.91,
-        centerFloor: 0.18,
-        edgeBase: 8.6,
-        edgeGrowth: 0.45,
+        targetEv: 0.83,
+        centerFloor: 0.14,
+        edgeBase: 6.4,
+        edgeGrowth: 0.34,
         curve: 1.1
     },
     high: {
         label: 'High Risk',
-        targetEv: 0.88,
-        centerFloor: 0.05,
-        edgeBase: 24,
-        edgeGrowth: 0.45,
+        targetEv: 0.8,
+        centerFloor: 0.03,
+        edgeBase: 18,
+        edgeGrowth: 0.34,
         curve: 0.92
     }
 };
@@ -1657,6 +1754,10 @@ async function dropPlinkoBall() {
         return;
     }
 
+    if (!startGameAction('plinko', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     plinkoAnimating = true;
     plinkoState.risk = risk;
     plinkoState.rows = rows;
@@ -1707,6 +1808,7 @@ async function dropPlinkoBall() {
 
         if (!playResult) {
             plinkoAnimating = false;
+            finishGameAction('plinko', LONG_GAME_COOLDOWN_MS);
             if (dropButton) {
                 dropButton.disabled = false;
                 dropButton.innerHTML = '<i class="fas fa-circle-nodes"></i> Drop Ball';
@@ -1769,6 +1871,7 @@ async function dropPlinkoBall() {
     }
 
     plinkoAnimating = false;
+    finishGameAction('plinko', LONG_GAME_COOLDOWN_MS);
 
     if (dropButton) {
         dropButton.disabled = false;
@@ -1882,6 +1985,10 @@ function startTowersGame() {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (towersGameActive || !startGameAction('towers', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     towersBetAmount = amount;
     towersGameActive = true;
@@ -1939,6 +2046,7 @@ function towersCashout() {
 
 async function towersGameEnd(won) {
     towersGameActive = false;
+    finishGameAction('towers', LONG_GAME_COOLDOWN_MS);
 
     const payout = won ? towersBetAmount * towersMultiplier : 0;
     const settlement = await settleWager({
@@ -2009,15 +2117,15 @@ function loadRouletteGame(container) {
                         <div class="roulette-color-grid">
                             <button class="quick-bet-btn roulette-color-btn is-red" onclick="spinRoulette('red')">
                                 <span>Red</span>
-                                <strong>1.90x</strong>
+                                <strong>1.78x</strong>
                             </button>
                             <button class="quick-bet-btn roulette-color-btn is-black" onclick="spinRoulette('black')">
                                 <span>Black</span>
-                                <strong>1.90x</strong>
+                                <strong>1.78x</strong>
                             </button>
                             <button class="quick-bet-btn roulette-color-btn is-green" onclick="spinRoulette('green')">
                                 <span>Green</span>
-                                <strong>10x</strong>
+                                <strong>8x</strong>
                             </button>
                         </div>
                     </div>
@@ -2061,6 +2169,7 @@ const ROULETTE_SEGMENTS = [
     { color: 'red', label: '13' },
     { color: 'black', label: '14' }
 ];
+const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
 
 let rouletteCanvas = null;
 let rouletteCtx = null;
@@ -2239,6 +2348,10 @@ async function spinRoulette(color) {
         return;
     }
 
+    if (!startGameAction('roulette', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     rouletteSpinning = true;
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
@@ -2274,6 +2387,7 @@ async function spinRoulette(color) {
 
         if (!playResult) {
             rouletteSpinning = false;
+            finishGameAction('roulette', LONG_GAME_COOLDOWN_MS);
             disableRouletteControls(false);
             return;
         }
@@ -2291,7 +2405,7 @@ async function spinRoulette(color) {
     if (isBetaMode) {
         const winningIndex = getRouletteWinningIndex();
         winningSegment = ROULETTE_SEGMENTS[winningIndex];
-        multiplier = winningSegment.color === 'green' ? 10 : 1.9;
+        multiplier = ROULETTE_PAYOUTS[winningSegment.color] || 0;
         won = winningSegment.color === color;
         payout = won ? amount * multiplier : 0;
     }
@@ -2329,6 +2443,7 @@ async function spinRoulette(color) {
 
     playGameSound('spin-stop');
     rouletteSpinning = false;
+    finishGameAction('roulette', LONG_GAME_COOLDOWN_MS);
     disableRouletteControls(false);
 }
 
@@ -2517,6 +2632,10 @@ function dealBlackjack() {
         return;
     }
 
+    if (!startGameAction('blackjack', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     blackjackBetAmount = amount;
     blackjackGameActive = true;
     blackjackResolving = false;
@@ -2635,6 +2754,7 @@ async function blackjackDouble() {
 async function endBlackjack(result) {
     blackjackGameActive = false;
     blackjackResolving = false;
+    finishGameAction('blackjack', LONG_GAME_COOLDOWN_MS);
     document.getElementById('blackjackActions').style.display = 'none';
     document.getElementById('blackjackDealBtn').style.display = 'block';
 
@@ -2709,12 +2829,12 @@ function loadSlotsGame(container) {
                     <div style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
                         <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary);">PAYTABLE</div>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px;">
-                            <div>🍒🍒🍒 = 5x</div>
-                            <div>🍋🍋🍋 = 10x</div>
-                            <div>🍊🍊🍊 = 15x</div>
-                            <div>🍇🍇🍇 = 20x</div>
-                            <div>💎💎💎 = 50x</div>
-                            <div>7️⃣7️⃣7️⃣ = 100x</div>
+                            <div>🍒🍒🍒 = 2x</div>
+                            <div>🍋🍋🍋 = 4x</div>
+                            <div>🍊🍊🍊 = 6x</div>
+                            <div>🍇🍇🍇 = 9x</div>
+                            <div>💎💎💎 = 14x</div>
+                            <div>7️⃣7️⃣7️⃣ = 24x</div>
                         </div>
                     </div>
                 </div>
@@ -2744,6 +2864,10 @@ function spinSlots() {
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
+        return;
+    }
+
+    if (!startGameAction('slots', LONG_GAME_COOLDOWN_MS)) {
         return;
     }
     
@@ -2776,7 +2900,7 @@ function spinSlots() {
                 const multipliers = {
                     '🍒': 5, '🍋': 10, '🍊': 15, '🍇': 20, '💎': 50, '7️⃣': 100
                 };
-                const multiplier = multipliers[results[0]];
+                const multiplier = Math.min(24, multipliers[results[0]] || 0);
                 const winAmount = amount * multiplier;
                 
                 const settlement = await settleWager({
@@ -2788,6 +2912,7 @@ function spinSlots() {
                 });
                 
                 if (!settlement) {
+                    finishGameAction('slots', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
                 
@@ -2810,6 +2935,7 @@ function spinSlots() {
                 });
                 
                 if (!settlement) {
+                    finishGameAction('slots', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
 
@@ -2826,6 +2952,7 @@ function spinSlots() {
                     reel.style.boxShadow = 'none';
                 });
             }, 3000);
+            finishGameAction('slots', LONG_GAME_COOLDOWN_MS);
         }
     }, 100);
 }
@@ -2863,7 +2990,7 @@ function loadCoinflipGame(container) {
                     
                     <div style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-top: 16px; text-align: center;">
                         <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">WIN MULTIPLIER</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--accent-success);">1.90x</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--accent-success);">1.78x</div>
                     </div>
                 </div>
             </div>
@@ -2883,6 +3010,10 @@ async function flipCoin(choice) {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (!startGameAction('coinflip', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     let liveResult = null;
 
@@ -2896,6 +3027,7 @@ async function flipCoin(choice) {
         });
 
         if (!liveResult) {
+            finishGameAction('coinflip', LONG_GAME_COOLDOWN_MS);
             return;
         }
     }
@@ -2931,6 +3063,7 @@ async function flipCoin(choice) {
                     : { success: true };
                 
                 if (!settlement) {
+                    finishGameAction('coinflip', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
                 result.innerHTML = `<span style="color: var(--accent-success);">YOU WON! +$${formatAmount(winAmount - amount)}</span>`;
@@ -2947,6 +3080,7 @@ async function flipCoin(choice) {
                     : { success: true };
                 
                 if (!settlement) {
+                    finishGameAction('coinflip', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
                 result.innerHTML = `<span style="color: var(--accent-danger);">YOU LOST! -$${formatAmount(amount)}</span>`;
@@ -2957,6 +3091,7 @@ async function flipCoin(choice) {
                 result.textContent = '';
                 coin.style.transform = 'rotateY(0deg)';
             }, 3000);
+            finishGameAction('coinflip', LONG_GAME_COOLDOWN_MS);
         }
     }, 200);
 }
@@ -2981,9 +3116,9 @@ function loadWheelGame(container) {
                     <div class="bet-input-group">
                         <label class="bet-label">Risk Level</label>
                         <select id="wheelRisk" class="bet-input">
-                            <option value="low">Low Risk (Max 3.4x)</option>
-                            <option value="medium">Medium Risk (Max 6.2x)</option>
-                            <option value="high">High Risk (Max 24x)</option>
+                            <option value="low">Low Risk (Max 2.45x)</option>
+                            <option value="medium">Medium Risk (Max 4.4x)</option>
+                            <option value="high">High Risk (Max 16x)</option>
                         </select>
                     </div>
                     
@@ -3011,25 +3146,25 @@ let wheelSpinning = false;
 let wheelCurrentRisk = 'low';
 
 const WHEEL_SEGMENT_MAP = {
-    low: [1.08, 1.22, 1.48, 2.05, 3.4, 2.05, 1.48, 1.22],
-    medium: [0.25, 0.7, 1.3, 2.7, 6.2, 2.7, 1.3, 0.7],
-    high: [0.03, 0.2, 0.6, 2.2, 24, 2.2, 0.6, 0.2]
+    low: [0.72, 0.92, 1.08, 1.42, 2.45, 1.42, 1.08, 0.92],
+    medium: [0.12, 0.45, 0.92, 1.75, 4.4, 1.75, 0.92, 0.45],
+    high: [0.02, 0.12, 0.38, 1.45, 16, 1.45, 0.38, 0.12]
 };
 
 const WHEEL_RISK_META = {
     low: {
         label: 'Low Risk',
-        copy: 'Smoother spins with a tighter floor and a capped 3.4x peak.',
+        copy: 'Smoother spins with a tighter floor and a capped 2.45x peak.',
         palette: ['#67e8f9', '#38bdf8', '#34d399', '#60a5fa']
     },
     medium: {
         label: 'Medium Risk',
-        copy: 'Balanced spread with colder misses and a sharper 6.2x target.',
+        copy: 'Balanced spread with colder misses and a sharper 4.4x target.',
         palette: ['#38bdf8', '#2563eb', '#22c55e', '#0ea5e9']
     },
     high: {
         label: 'High Risk',
-        copy: 'Brutal spread, tiny recovery lanes, and one explosive 24x spike.',
+        copy: 'Brutal spread, tiny recovery lanes, and one explosive 16x spike.',
         palette: ['#fb7185', '#f97316', '#38bdf8', '#1d4ed8']
     }
 };
@@ -3192,6 +3327,10 @@ async function spinWheel() {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (!startGameAction('wheel', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     wheelSpinning = true;
     spinButton.disabled = true;
@@ -3215,6 +3354,7 @@ async function spinWheel() {
 
         if (!playResult) {
             wheelSpinning = false;
+            finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
             spinButton.disabled = false;
             spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
             riskSelect.disabled = false;
@@ -3238,7 +3378,7 @@ async function spinWheel() {
         const progress = Math.min(elapsed / duration, 1);
         const easeOut = 1 - Math.pow(1 - progress, 3);
         
-        wheelRotation = startRotation + targetRotation * easeOut;
+        wheelRotation = startRotation + (targetRotation - startRotation) * easeOut;
         drawWheel();
         
         if (progress < 1) {
@@ -3259,6 +3399,7 @@ async function spinWheel() {
             
             if (!settlement) {
                 wheelSpinning = false;
+                finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
                 spinButton.disabled = false;
                 spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
                 riskSelect.disabled = false;
@@ -3273,6 +3414,7 @@ async function spinWheel() {
             `;
             showNotification(`${multiplier}x - ${profit > 0 ? 'Won' : 'Lost'} $${formatAmount(Math.abs(profit))}`, profit > 0 ? 'success' : 'error');
             wheelSpinning = false;
+            finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
             spinButton.disabled = false;
             spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
             riskSelect.disabled = false;
@@ -3319,7 +3461,7 @@ function loadLimboGame(container) {
 }
 
 function updateLimboChance() {
-    const target = parseFloat(document.getElementById('limboTarget').value) || 2;
+    const target = Math.max(1.01, Math.min(LIMBO_MAX_TARGET, parseFloat(document.getElementById('limboTarget').value) || 2));
     const chance = (LIMBO_EDGE / target) * 100;
     document.getElementById('limboChance').textContent = chance.toFixed(2) + '%';
 }
@@ -3342,6 +3484,10 @@ async function playLimbo() {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (!startGameAction('limbo', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
@@ -3351,7 +3497,7 @@ async function playLimbo() {
     
     // Animate counting
     let current = 1.00;
-    const result = isBetaMode ? 1 + Math.random() * 99 : 0;
+    const result = isBetaMode ? rollInverseMultiplier(LIMBO_EDGE, LIMBO_MAX_TARGET) : 0;
     let liveResult = null;
     if (!isBetaMode) {
         liveResult = await playServerGame({
@@ -3362,10 +3508,11 @@ async function playLimbo() {
 
         if (!liveResult) {
             document.getElementById('limboStatus').textContent = 'Set your target and play!';
+            finishGameAction('limbo', LONG_GAME_COOLDOWN_MS);
             return;
         }
     }
-    const targetResult = isBetaMode ? result : Number(liveResult.resultMultiplier || 0);
+    const targetResult = isBetaMode ? result : clampMultiplier(liveResult.resultMultiplier || 1, LIMBO_MAX_TARGET);
     const increment = targetResult / 30;
     
     const countInterval = setInterval(async () => {
@@ -3389,6 +3536,7 @@ async function playLimbo() {
                     : { success: true };
                 
                 if (!settlement) {
+                    finishGameAction('limbo', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
                 document.getElementById('limboStatus').innerHTML = `
@@ -3407,6 +3555,7 @@ async function playLimbo() {
                     : { success: true };
                 
                 if (!settlement) {
+                    finishGameAction('limbo', LONG_GAME_COOLDOWN_MS);
                     return;
                 }
                 document.getElementById('limboStatus').innerHTML = `
@@ -3419,6 +3568,7 @@ async function playLimbo() {
                 document.getElementById('limboResult').textContent = '0.00x';
                 document.getElementById('limboStatus').textContent = 'Set your target and play!';
             }, 3000);
+            finishGameAction('limbo', LONG_GAME_COOLDOWN_MS);
         }
         
         document.getElementById('limboResult').textContent = current.toFixed(2) + 'x';
@@ -3458,27 +3608,27 @@ function loadKenoGame(container) {
                         <div style="font-weight: 700; margin-bottom: 8px; color: var(--text-secondary);">PAYOUTS</div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>5 matches</span>
-                            <span style="font-weight: 700;">1.4x</span>
+                            <span style="font-weight: 700;">1.15x</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>6 matches</span>
-                            <span style="font-weight: 700;">2.5x</span>
+                            <span style="font-weight: 700;">1.8x</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>7 matches</span>
-                            <span style="font-weight: 700;">4.5x</span>
+                            <span style="font-weight: 700;">3.2x</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>8 matches</span>
-                            <span style="font-weight: 700;">9x</span>
+                            <span style="font-weight: 700;">6.4x</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>9 matches</span>
-                            <span style="font-weight: 700;">18x</span>
+                            <span style="font-weight: 700;">12x</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
                             <span>10 matches</span>
-                            <span style="font-weight: 700; color: var(--accent-success);">36x</span>
+                            <span style="font-weight: 700; color: var(--accent-success);">24x</span>
                         </div>
                     </div>
                 </div>
@@ -3555,6 +3705,10 @@ async function playKeno() {
         showNotification('Insufficient balance', 'error');
         return;
     }
+
+    if (!startGameAction('keno', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
     
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
@@ -3581,6 +3735,7 @@ async function playKeno() {
         });
 
         if (!playResult) {
+            finishGameAction('keno', LONG_GAME_COOLDOWN_MS);
             return;
         }
 
@@ -3611,6 +3766,7 @@ async function playKeno() {
         : { success: true };
     
     if (!settlement) {
+        finishGameAction('keno', LONG_GAME_COOLDOWN_MS);
         return;
     }
     
@@ -3625,6 +3781,7 @@ async function playKeno() {
         `;
         showNotification(`${matches} matches - Lost $${formatAmount(amount)}`, 'error');
     }
+    finishGameAction('keno', LONG_GAME_COOLDOWN_MS);
 }
 
 window.handleCrashRealtimeState = handleCrashRealtimeState;

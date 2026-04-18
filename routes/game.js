@@ -14,10 +14,10 @@ const {
     sanitizeClientSeed
 } = require('../config/provablyFair');
 
-const GENERIC_BET_EDGE = 0.93;
-const DICE_EDGE = 0.93;
-const LIMBO_EDGE = 0.93;
-const CRASH_EDGE = 0.94;
+const GENERIC_BET_EDGE = 0.86;
+const DICE_EDGE = 0.86;
+const LIMBO_EDGE = 0.84;
+const CRASH_EDGE = 0.86;
 const LIMBO_MAX_TARGET = 25;
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
@@ -26,6 +26,7 @@ const CRASH_BETTING_WINDOW_MS = 8000;
 const CRASH_RESULT_WINDOW_MS = 2400;
 const CRASH_TICK_INTERVAL_MS = 120;
 const CRASH_HISTORY_LIMIT = 12;
+const GAME_ACTION_SERVER_COOLDOWN_MS = 650;
 const ROULETTE_SEGMENTS = [
     { color: 'green', label: '0' },
     { color: 'red', label: '1' },
@@ -43,19 +44,19 @@ const ROULETTE_SEGMENTS = [
     { color: 'red', label: '13' },
     { color: 'black', label: '14' }
 ];
-const ROULETTE_PAYOUTS = { red: 1.9, black: 1.9, green: 10 };
-const COINFLIP_PAYOUT = 1.9;
+const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
+const COINFLIP_PAYOUT = 1.78;
 const PLINKO_RISK_CONFIG = {
-    low: { label: 'Low', targetEv: 0.94, centerFloor: 0.62, edgeBase: 4.2, edgeGrowth: 0.24, curve: 1.34 },
-    medium: { label: 'Medium', targetEv: 0.91, centerFloor: 0.18, edgeBase: 8.6, edgeGrowth: 0.45, curve: 1.1 },
-    high: { label: 'High', targetEv: 0.88, centerFloor: 0.05, edgeBase: 24, edgeGrowth: 0.45, curve: 0.92 }
+    low: { label: 'Low', targetEv: 0.86, centerFloor: 0.58, edgeBase: 3.4, edgeGrowth: 0.18, curve: 1.34 },
+    medium: { label: 'Medium', targetEv: 0.83, centerFloor: 0.14, edgeBase: 6.4, edgeGrowth: 0.34, curve: 1.1 },
+    high: { label: 'High', targetEv: 0.8, centerFloor: 0.03, edgeBase: 18, edgeGrowth: 0.34, curve: 0.92 }
 };
 const WHEEL_SEGMENT_MAP = {
-    low: [1.08, 1.22, 1.48, 2.05, 3.4, 2.05, 1.48, 1.22],
-    medium: [0.25, 0.7, 1.3, 2.7, 6.2, 2.7, 1.3, 0.7],
-    high: [0.03, 0.2, 0.6, 2.2, 24, 2.2, 0.6, 0.2]
+    low: [0.72, 0.92, 1.08, 1.42, 2.45, 1.42, 1.08, 0.92],
+    medium: [0.12, 0.45, 0.92, 1.75, 4.4, 1.75, 0.92, 0.45],
+    high: [0.02, 0.12, 0.38, 1.45, 16, 1.45, 0.38, 0.12]
 };
-const KENO_PAYOUTS = { 5: 1.4, 6: 2.5, 7: 4.5, 8: 9, 9: 18, 10: 36 };
+const KENO_PAYOUTS = { 5: 1.15, 6: 1.8, 7: 3.2, 8: 6.4, 9: 12, 10: 24 };
 const KNOWN_GAME_TYPES = new Set([
     'casino',
     'crash',
@@ -69,11 +70,12 @@ const KNOWN_GAME_TYPES = new Set([
     'wheel',
     'limbo',
     'keno',
+    'slots',
     'cases',
     'casebattles'
 ]);
 const SERVER_PLAY_GAME_TYPES = new Set(['dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo', 'keno']);
-const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'casebattles']);
+const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'slots', 'casebattles']);
 const MAX_MULTIPLIER_BY_GAME = {
     casino: 40,
     crash: 80,
@@ -86,12 +88,14 @@ const MAX_MULTIPLIER_BY_GAME = {
     coinflip: COINFLIP_PAYOUT,
     wheel: 24,
     limbo: LIMBO_MAX_TARGET,
-    keno: 36,
+    keno: 24,
+    slots: 24,
     cases: 12,
     casebattles: 4
 };
 let crashIo = null;
 let crashRoundCounter = 0;
+const serverActionCooldowns = new Map();
 const crashRoundState = {
     phase: 'betting',
     roundId: 0,
@@ -123,6 +127,28 @@ function sanitizeGameType(gameType) {
         .slice(0, 32);
 
     return KNOWN_GAME_TYPES.has(safeValue) ? safeValue : 'casino';
+}
+
+function claimServerActionCooldown(username, actionKey, cooldownMs = GAME_ACTION_SERVER_COOLDOWN_MS) {
+    const key = `${username}:${actionKey}`;
+    const now = Date.now();
+    const nextAllowedAt = serverActionCooldowns.get(key) || 0;
+
+    if (now < nextAllowedAt) {
+        return false;
+    }
+
+    serverActionCooldowns.set(key, now + cooldownMs);
+
+    if (serverActionCooldowns.size > 5000) {
+        for (const [storedKey, storedAt] of serverActionCooldowns.entries()) {
+            if (storedAt < now) {
+                serverActionCooldowns.delete(storedKey);
+            }
+        }
+    }
+
+    return true;
 }
 
 function sanitizeRequestId(value) {
@@ -828,7 +854,7 @@ function resolveServerGame({ gameType, amount, body, profile, nonceUsed }) {
     if (gameType === 'limbo') {
         const target = Math.min(LIMBO_MAX_TARGET, Math.max(1.01, toMoney(readNumber(body.target) || 2)));
         const roll = rollFloat({ serverSeed: profile.server_seed, clientSeed: profile.client_seed, nonce: nonceUsed });
-        const resultMultiplier = Math.min(100, toMoney(Math.max(1, LIMBO_EDGE / Math.max(0.01, 1 - roll))));
+        const resultMultiplier = Math.min(LIMBO_MAX_TARGET, toMoney(Math.max(1, LIMBO_EDGE / Math.max(0.0001, 1 - roll))));
         const won = resultMultiplier >= target;
         return {
             amount,
@@ -893,6 +919,10 @@ router.post('/crash/bet', requireAuth, async (req, res) => {
     const autoCashout = Number.isFinite(autoCashoutInput) && autoCashoutInput >= 1.01
         ? Math.min(80, toMoney(autoCashoutInput))
         : 0;
+
+    if (!claimServerActionCooldown(username, 'crash:bet')) {
+        return res.status(429).json({ success: false, message: 'Slow down before placing another crash bet' });
+    }
 
     ensureCrashLoopStarted();
 
@@ -1114,6 +1144,10 @@ router.post('/bet', requireAuth, async (req, res) => {
     const gameType = sanitizeGameType(req.body.gameType);
     const requestId = sanitizeRequestId(req.body.requestId);
 
+    if (!claimServerActionCooldown(username, `bet:${gameType}`)) {
+        return res.status(429).json({ success: false, message: 'Slow down before placing another bet' });
+    }
+
     if (!amount || amount <= 0 || !multiplier || multiplier < 1.01 || multiplier > 40) {
         return res.status(400).json({ success: false, message: 'Invalid bet parameters' });
     }
@@ -1207,6 +1241,10 @@ router.post('/play', requireAuth, async (req, res) => {
     const gameType = sanitizeGameType(req.body.gameType);
     const requestId = sanitizeRequestId(req.body.requestId);
 
+    if (!claimServerActionCooldown(username, `play:${gameType}`)) {
+        return res.status(429).json({ success: false, message: 'Slow down before starting another round' });
+    }
+
     if (!SERVER_PLAY_GAME_TYPES.has(gameType)) {
         return res.status(400).json({ success: false, message: 'This table must be settled on the server' });
     }
@@ -1297,6 +1335,10 @@ router.post('/cases/open', requireAuth, async (req, res) => {
     const caseInfo = getCaseById(req.body.caseId);
     const requestedCount = Number(req.body.count || 1);
     const openCount = [1, 3, 10].includes(requestedCount) ? requestedCount : 1;
+
+    if (!claimServerActionCooldown(username, `case:${caseInfo?.id || req.body.caseId || 'unknown'}`, openCount > 1 ? 1400 : 900)) {
+        return res.status(429).json({ success: false, message: 'Finish the current case opening first' });
+    }
 
     if (!caseInfo) {
         return res.status(404).json({ success: false, message: 'Case not found' });
@@ -1408,6 +1450,10 @@ router.post('/settle', requireAuth, async (req, res) => {
     const username = req.session.username;
     const gameType = sanitizeGameType(req.body.gameType);
     const requestId = sanitizeRequestId(req.body.requestId);
+
+    if (!claimServerActionCooldown(username, `settle:${gameType}`)) {
+        return res.status(429).json({ success: false, message: 'Slow down before settling another round' });
+    }
 
     if (!INTERACTIVE_SETTLE_GAME_TYPES.has(gameType)) {
         return res.status(400).json({ success: false, message: 'This table now resolves directly on the server' });
