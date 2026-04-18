@@ -101,6 +101,8 @@ let crashAwaitingBet = false;
 let crashAwaitingCashout = false;
 let crashAutoCashout = 0;
 let crashUiTicker = null;
+let jackpotState = null;
+let jackpotPoller = null;
 const CRASH_EDGE = 0.86;
 const DICE_EDGE = 0.86;
 const COINFLIP_PAYOUT = 1.78;
@@ -158,6 +160,34 @@ function startGameAction(actionKey, cooldownMs = GAME_COOLDOWN_MS) {
 function finishGameAction(actionKey, cooldownMs = GAME_COOLDOWN_MS) {
     GAME_ACTION_BUSY.delete(actionKey);
     GAME_ACTION_COOLDOWNS.set(actionKey, performance.now() + cooldownMs);
+}
+
+function cleanupGameRuntime() {
+    if (jackpotPoller) {
+        clearInterval(jackpotPoller);
+        jackpotPoller = null;
+    }
+
+    if (crashUiTicker) {
+        clearInterval(crashUiTicker);
+        crashUiTicker = null;
+    }
+
+    if (crashAnimationFrame) {
+        cancelAnimationFrame(crashAnimationFrame);
+        crashAnimationFrame = null;
+    }
+
+    plinkoRuntimeToken += 1;
+    plinkoAnimating = false;
+    plinkoActiveDrops = 0;
+    if (plinkoState) {
+        plinkoState.activeDrops = [];
+        plinkoState.targetBuckets = [];
+        plinkoState.ball = null;
+        plinkoState.trail = [];
+        plinkoState.targetBucket = null;
+    }
 }
 
 function initCrashGame() {
@@ -446,7 +476,7 @@ function drawCrashGraph() {
 }
 
 function createCrashParticles(x, y, color) {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 10; i++) {
         crashParticles.push({
             x: x,
             y: y,
@@ -1147,6 +1177,8 @@ async function finishDiceRoll(amount, rollOver) {
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
 const MAX_PLINKO_ROWS = 16;
+const PLINKO_MAX_ACTIVE_DROPS = 10;
+const PLINKO_RESULT_CLEAR_MS = 1800;
 const PLINKO_RISK_CONFIG = {
     low: {
         label: 'Low Risk',
@@ -1177,13 +1209,18 @@ const PLINKO_RISK_CONFIG = {
 let plinkoCanvas = null;
 let plinkoCtx = null;
 let plinkoAnimating = false;
+let plinkoActiveDrops = 0;
+let plinkoHitSoundAt = 0;
+let plinkoRuntimeToken = 0;
 let plinkoState = {
     risk: 'medium',
     rows: DEFAULT_PLINKO_ROWS,
     ball: null,
     trail: [],
     targetBucket: null,
-    buckets: []
+    targetBuckets: [],
+    buckets: [],
+    activeDrops: []
 };
 
 function loadPlinkoGame(container) {
@@ -1259,7 +1296,10 @@ function loadPlinkoGame(container) {
 function initPlinkoGame() {
     plinkoCanvas = document.getElementById('plinkoCanvas');
     plinkoCtx = plinkoCanvas ? plinkoCanvas.getContext('2d') : null;
+    plinkoRuntimeToken += 1;
     plinkoAnimating = false;
+    plinkoActiveDrops = 0;
+    plinkoHitSoundAt = 0;
 
     const riskSelect = document.getElementById('plinkoRisk');
     const rowsInput = document.getElementById('plinkoRows');
@@ -1268,11 +1308,13 @@ function initPlinkoGame() {
     plinkoState.ball = null;
     plinkoState.trail = [];
     plinkoState.targetBucket = null;
+    plinkoState.targetBuckets = [];
     plinkoState.buckets = [];
+    plinkoState.activeDrops = [];
 
     if (riskSelect) {
         riskSelect.addEventListener('change', () => {
-            if (plinkoAnimating) {
+            if (plinkoActiveDrops > 0) {
                 return;
             }
 
@@ -1284,7 +1326,7 @@ function initPlinkoGame() {
 
     if (rowsInput) {
         rowsInput.addEventListener('input', () => {
-            if (plinkoAnimating) {
+            if (plinkoActiveDrops > 0) {
                 return;
             }
 
@@ -1513,13 +1555,55 @@ function updatePlinkoBoardUi() {
         }).join('');
     }
 
-    setPlinkoHighlightedBucket(plinkoState.targetBucket);
+    setPlinkoHighlightedBucket(plinkoState.targetBuckets);
 }
 
 function setPlinkoHighlightedBucket(bucketIndex = null) {
+    const activeBuckets = new Set(Array.isArray(bucketIndex)
+        ? bucketIndex.filter((index) => Number.isInteger(index))
+        : (Number.isInteger(bucketIndex) ? [bucketIndex] : []));
+
     document.querySelectorAll('#plinkoBuckets .plinko-bucket').forEach((bucket, index) => {
-        bucket.classList.toggle('active', bucketIndex === index);
+        bucket.classList.toggle('active', activeBuckets.has(index));
     });
+}
+
+function getActivePlinkoDrops() {
+    if (Array.isArray(plinkoState.activeDrops) && plinkoState.activeDrops.length > 0) {
+        return plinkoState.activeDrops;
+    }
+
+    if (plinkoState.ball) {
+        return [{ ball: plinkoState.ball, trail: plinkoState.trail || [] }];
+    }
+
+    return [];
+}
+
+function setPlinkoInputsLocked(locked) {
+    const riskSelect = document.getElementById('plinkoRisk');
+    const rowsInput = document.getElementById('plinkoRows');
+
+    if (riskSelect) {
+        riskSelect.disabled = locked;
+    }
+
+    if (rowsInput) {
+        rowsInput.disabled = locked;
+    }
+}
+
+function refreshPlinkoDropButton() {
+    const dropButton = document.getElementById('plinkoDropBtn');
+    if (!dropButton) {
+        return;
+    }
+
+    const atLimit = plinkoActiveDrops >= PLINKO_MAX_ACTIVE_DROPS;
+    dropButton.disabled = atLimit;
+    dropButton.innerHTML = plinkoActiveDrops > 0
+        ? `<i class="fas fa-circle-nodes"></i> Drop Ball (${plinkoActiveDrops})`
+        : '<i class="fas fa-circle-nodes"></i> Drop Ball';
 }
 
 function drawPlinkoBoard() {
@@ -1529,6 +1613,10 @@ function drawPlinkoBoard() {
 
     const geometry = getPlinkoGeometry();
     const profile = getPlinkoProfile(plinkoState.risk, plinkoState.rows);
+    const activeDrops = getActivePlinkoDrops();
+    const activeBucketSet = new Set(Array.isArray(plinkoState.targetBuckets)
+        ? plinkoState.targetBuckets
+        : (Number.isInteger(plinkoState.targetBucket) ? [plinkoState.targetBucket] : []));
 
     plinkoCtx.clearRect(0, 0, geometry.width, geometry.height);
 
@@ -1578,7 +1666,7 @@ function drawPlinkoBoard() {
 
     for (let bucket = 0; bucket < profile.multipliers.length; bucket++) {
         const x = getPlinkoBucketX(bucket);
-        const isHot = plinkoState.targetBucket === bucket;
+        const isHot = activeBucketSet.has(bucket);
         const accent = getPlinkoBucketCanvasColor(profile.multipliers[bucket]);
         const slotWidth = geometry.pegSpacing * 0.84;
 
@@ -1619,7 +1707,9 @@ function drawPlinkoBoard() {
 
         for (let peg = 0; peg < pegCount; peg++) {
             const x = geometry.centerX + (peg - row / 2) * geometry.pegSpacing;
-            const isNearBall = plinkoState.ball && Math.hypot(plinkoState.ball.x - x, plinkoState.ball.y - y) < geometry.ballRadius + 12;
+            const isNearBall = activeDrops.some((drop) => (
+                drop.ball && Math.hypot(drop.ball.x - x, drop.ball.y - y) < geometry.ballRadius + 12
+            ));
 
             plinkoCtx.beginPath();
             plinkoCtx.arc(x, y, geometry.pegRadius, 0, Math.PI * 2);
@@ -1634,30 +1724,38 @@ function drawPlinkoBoard() {
 
     plinkoCtx.shadowBlur = 0;
 
-    if (plinkoState.trail.length > 1) {
-        for (let index = 1; index < plinkoState.trail.length; index++) {
-            const from = plinkoState.trail[index - 1];
-            const to = plinkoState.trail[index];
-            const alpha = index / plinkoState.trail.length;
+    activeDrops.forEach((drop) => {
+        const trail = drop.trail || [];
+        if (trail.length > 1) {
+            for (let index = 1; index < trail.length; index++) {
+                const from = trail[index - 1];
+                const to = trail[index];
+                const alpha = index / trail.length;
 
-            plinkoCtx.beginPath();
-            plinkoCtx.moveTo(from.x, from.y);
-            plinkoCtx.lineTo(to.x, to.y);
-            plinkoCtx.lineWidth = 2 + alpha * 3;
-            plinkoCtx.strokeStyle = `rgba(103, 232, 249, ${alpha * 0.55})`;
-            plinkoCtx.stroke();
+                plinkoCtx.beginPath();
+                plinkoCtx.moveTo(from.x, from.y);
+                plinkoCtx.lineTo(to.x, to.y);
+                plinkoCtx.lineWidth = 2 + alpha * 3;
+                plinkoCtx.strokeStyle = `rgba(103, 232, 249, ${alpha * 0.45})`;
+                plinkoCtx.stroke();
+            }
         }
-    }
+    });
 
-    if (plinkoState.ball) {
+    activeDrops.forEach((drop) => {
+        const ball = drop.ball;
+        if (!ball) {
+            return;
+        }
+
         plinkoCtx.beginPath();
-        plinkoCtx.arc(plinkoState.ball.x, plinkoState.ball.y, geometry.ballRadius, 0, Math.PI * 2);
+        plinkoCtx.arc(ball.x, ball.y, geometry.ballRadius, 0, Math.PI * 2);
         const ballGlow = plinkoCtx.createRadialGradient(
-            plinkoState.ball.x - 4,
-            plinkoState.ball.y - 4,
+            ball.x - 4,
+            ball.y - 4,
             2,
-            plinkoState.ball.x,
-            plinkoState.ball.y,
+            ball.x,
+            ball.y,
             geometry.ballRadius + 6
         );
         ballGlow.addColorStop(0, '#ffffff');
@@ -1668,7 +1766,7 @@ function drawPlinkoBoard() {
         plinkoCtx.shadowColor = 'rgba(124, 199, 255, 0.82)';
         plinkoCtx.fill();
         plinkoCtx.shadowBlur = 0;
-    }
+    });
 
     plinkoCtx.strokeStyle = 'rgba(124, 199, 255, 0.26)';
     plinkoCtx.lineWidth = 3;
@@ -1681,29 +1779,39 @@ function drawPlinkoBoard() {
 
 function animatePlinkoPath(path) {
     return new Promise((resolve) => {
+        const runtimeToken = plinkoRuntimeToken;
         const geometry = getPlinkoGeometry();
         let segmentIndex = 0;
         let segmentStart = performance.now();
         const segmentDuration = Math.max(118, 156 - geometry.rows * 2);
         const bounceHeight = Math.max(6, Math.min(14, geometry.rowSpacing * 0.3 || 10));
+        const drop = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            ball: { ...path[0] },
+            trail: [{ ...path[0] }]
+        };
 
-        plinkoState.ball = { ...path[0] };
-        plinkoState.trail = [{ ...path[0] }];
+        plinkoState.activeDrops.push(drop);
 
         function step(now) {
+            if (runtimeToken !== plinkoRuntimeToken || !plinkoCtx || !plinkoCanvas) {
+                resolve(drop.id);
+                return;
+            }
+
             const from = path[segmentIndex];
             const to = path[segmentIndex + 1];
             const rawProgress = Math.min((now - segmentStart) / segmentDuration, 1);
             const easedProgress = 1 - Math.pow(1 - rawProgress, 3);
 
-            plinkoState.ball = {
+            drop.ball = {
                 x: from.x + (to.x - from.x) * easedProgress,
                 y: from.y + (to.y - from.y) * easedProgress - Math.sin(rawProgress * Math.PI) * bounceHeight
             };
-            plinkoState.trail.push({ ...plinkoState.ball });
+            drop.trail.push({ ...drop.ball });
 
-            if (plinkoState.trail.length > 28) {
-                plinkoState.trail.shift();
+            if (drop.trail.length > 22) {
+                drop.trail.shift();
             }
 
             drawPlinkoBoard();
@@ -1712,14 +1820,15 @@ function animatePlinkoPath(path) {
                 segmentIndex++;
                 segmentStart = now;
 
-                if (segmentIndex < path.length - 1) {
+                if (segmentIndex < path.length - 1 && now - plinkoHitSoundAt > 70) {
+                    plinkoHitSoundAt = now;
                     playGameSound('plinko-hit');
                 }
 
                 if (segmentIndex >= path.length - 1) {
-                    plinkoState.ball = { ...path[path.length - 1] };
+                    drop.ball = { ...path[path.length - 1] };
                     drawPlinkoBoard();
-                    resolve();
+                    resolve(drop.id);
                     return;
                 }
             }
@@ -1740,7 +1849,8 @@ async function dropPlinkoBall() {
     const risk = riskSelect ? riskSelect.value : 'medium';
     const rows = rowsInput ? sanitizePlinkoRows(rowsInput.value) : plinkoState.rows;
 
-    if (plinkoAnimating) {
+    if (plinkoActiveDrops >= PLINKO_MAX_ACTIVE_DROPS) {
+        showNotification('Let a few Plinko balls land first.', 'info');
         return;
     }
 
@@ -1754,35 +1864,25 @@ async function dropPlinkoBall() {
         return;
     }
 
-    if (!startGameAction('plinko', LONG_GAME_COOLDOWN_MS)) {
-        return;
-    }
-
+    plinkoActiveDrops += 1;
     plinkoAnimating = true;
     plinkoState.risk = risk;
     plinkoState.rows = rows;
     plinkoState.targetBucket = null;
+    plinkoState.targetBuckets = [];
     updatePlinkoBoardUi();
 
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
     }
 
-    if (dropButton) {
-        dropButton.disabled = true;
-        dropButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dropping...';
-    }
-
-    if (riskSelect) {
-        riskSelect.disabled = true;
-    }
-
-    if (rowsInput) {
-        rowsInput.disabled = true;
-    }
+    setPlinkoInputsLocked(true);
+    refreshPlinkoDropButton();
 
     if (result) {
-        result.textContent = 'Ball is in the air...';
+        result.textContent = plinkoActiveDrops > 1
+            ? `${plinkoActiveDrops} balls are live...`
+            : 'Ball is in the air...';
     }
 
     playGameSound('bet-place');
@@ -1807,18 +1907,10 @@ async function dropPlinkoBall() {
         });
 
         if (!playResult) {
-            plinkoAnimating = false;
-            finishGameAction('plinko', LONG_GAME_COOLDOWN_MS);
-            if (dropButton) {
-                dropButton.disabled = false;
-                dropButton.innerHTML = '<i class="fas fa-circle-nodes"></i> Drop Ball';
-            }
-            if (riskSelect) {
-                riskSelect.disabled = false;
-            }
-            if (rowsInput) {
-                rowsInput.disabled = false;
-            }
+            plinkoActiveDrops = Math.max(0, plinkoActiveDrops - 1);
+            plinkoAnimating = plinkoActiveDrops > 0;
+            setPlinkoInputsLocked(plinkoActiveDrops > 0);
+            refreshPlinkoDropButton();
             return;
         }
 
@@ -1832,10 +1924,11 @@ async function dropPlinkoBall() {
 
     const path = buildPlinkoPath(decisions);
 
-    await animatePlinkoPath(path);
+    const dropId = await animatePlinkoPath(path);
 
     plinkoState.targetBucket = bucketIndex;
-    setPlinkoHighlightedBucket(bucketIndex);
+    plinkoState.targetBuckets.push(bucketIndex);
+    setPlinkoHighlightedBucket(plinkoState.targetBuckets);
     drawPlinkoBoard();
 
     const profit = payout - amount;
@@ -1859,42 +1952,36 @@ async function dropPlinkoBall() {
             `;
         }
 
-        showNotification(
-            profit > 0
-                ? `Plinko hit ${formatGameMultiplier(multiplier)} for +$${formatAmount(profit)}`
-                : profit < 0
-                    ? `Plinko landed ${formatGameMultiplier(multiplier)} for -$${formatAmount(Math.abs(profit))}`
-                    : `Plinko landed exactly on ${formatGameMultiplier(multiplier)}`,
-            notificationType
-        );
+        if (profit > 0 || plinkoActiveDrops <= 1) {
+            showNotification(
+                profit > 0
+                    ? `Plinko hit ${formatGameMultiplier(multiplier)} for +$${formatAmount(profit)}`
+                    : profit < 0
+                        ? `Plinko landed ${formatGameMultiplier(multiplier)} for -$${formatAmount(Math.abs(profit))}`
+                        : `Plinko landed exactly on ${formatGameMultiplier(multiplier)}`,
+                notificationType
+            );
+        }
         playGameSound(profit > 0 ? 'cashout' : profit < 0 ? 'explode' : 'button');
     }
 
-    plinkoAnimating = false;
-    finishGameAction('plinko', LONG_GAME_COOLDOWN_MS);
-
-    if (dropButton) {
-        dropButton.disabled = false;
-        dropButton.innerHTML = '<i class="fas fa-circle-nodes"></i> Drop Ball';
-    }
-
-    if (riskSelect) {
-        riskSelect.disabled = false;
-    }
-
-    if (rowsInput) {
-        rowsInput.disabled = false;
-    }
+    plinkoActiveDrops = Math.max(0, plinkoActiveDrops - 1);
+    plinkoAnimating = plinkoActiveDrops > 0;
+    setPlinkoInputsLocked(plinkoActiveDrops > 0);
+    refreshPlinkoDropButton();
 
     setTimeout(() => {
-        if (!plinkoAnimating) {
-            plinkoState.ball = null;
-            plinkoState.trail = [];
-            plinkoState.targetBucket = null;
-            setPlinkoHighlightedBucket(null);
-            drawPlinkoBoard();
+        plinkoState.activeDrops = plinkoState.activeDrops.filter((drop) => drop.id !== dropId);
+        const bucketPosition = plinkoState.targetBuckets.indexOf(bucketIndex);
+        if (bucketPosition >= 0) {
+            plinkoState.targetBuckets.splice(bucketPosition, 1);
         }
-    }, 3200);
+        plinkoState.ball = null;
+        plinkoState.trail = [];
+        plinkoState.targetBucket = plinkoState.targetBuckets[plinkoState.targetBuckets.length - 1] ?? null;
+        setPlinkoHighlightedBucket(plinkoState.targetBuckets);
+        drawPlinkoBoard();
+    }, PLINKO_RESULT_CLEAR_MS);
 }
 
 // Placeholder loaders for other games
@@ -3575,6 +3662,234 @@ async function playLimbo() {
     }, 50);
 }
 
+function loadJackpotGame(container) {
+    container.innerHTML = `
+        <div class="game-container jackpot-game">
+            <div class="responsive-grid jackpot-layout">
+                <section class="jackpot-stage">
+                    <div class="jackpot-pot-card">
+                        <span class="banner-tag">Shared Jackpot</span>
+                        <strong id="jackpotPot">$0.00</strong>
+                        <p id="jackpotStatus">Waiting for players...</p>
+                    </div>
+                    <div class="jackpot-meter">
+                        <span id="jackpotTimer">--</span>
+                        <small id="jackpotSeats">0 / 10 seats</small>
+                    </div>
+                    <div id="jackpotEntries" class="jackpot-entry-list"></div>
+                    <div id="jackpotHistory" class="jackpot-history"></div>
+                </section>
+
+                <aside class="bet-panel jackpot-panel">
+                    <div class="bet-input-group">
+                        <label class="bet-label">Jackpot Bet</label>
+                        <input type="text" id="jackpotBetAmount" class="bet-input" placeholder="1k, 5m, 1b" min="1" oninput="renderJackpotState()">
+                    </div>
+                    <div class="stat-list">
+                        <div class="stat-row">
+                            <span class="stat-row-label">Your Chance</span>
+                            <span class="stat-row-value" id="jackpotChance">0%</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-row-label">Max Players</span>
+                            <span class="stat-row-value">10</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-row-label">Draw Rule</span>
+                            <span class="stat-row-value">Weighted by bet</span>
+                        </div>
+                    </div>
+                    <button id="jackpotJoinBtn" class="btn-primary" onclick="joinJackpot()">
+                        <i class="fas fa-vault"></i> Join Jackpot
+                    </button>
+                    <div class="jackpot-note">
+                        Bigger bets own a bigger slice of the pot. One winner takes the full pool.
+                    </div>
+                </aside>
+            </div>
+        </div>
+    `;
+
+    enhanceAmountInputs(container);
+    renderJackpotState();
+    refreshJackpotState();
+
+    jackpotPoller = setInterval(() => {
+        if (currentGame === 'jackpot') {
+            refreshJackpotState();
+        }
+    }, 3500);
+}
+
+function getJackpotCountdown(closesAt) {
+    if (!closesAt) {
+        return '--';
+    }
+
+    const seconds = Math.max(0, Math.ceil((Number(closesAt) - Date.now()) / 1000));
+    return `${seconds}s`;
+}
+
+function handleJackpotState(payload) {
+    jackpotState = payload?.jackpot || payload || jackpotState;
+
+    if (currentGame === 'jackpot') {
+        renderJackpotState();
+    }
+}
+
+async function refreshJackpotState() {
+    if (isBetaMode) {
+        jackpotState = {
+            status: 'open',
+            maxPlayers: 10,
+            playerCount: 0,
+            pot: 0,
+            entries: [],
+            history: []
+        };
+        renderJackpotState();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/game/jackpot/state');
+        const data = await readJsonResponse(response, 'Jackpot unavailable');
+        jackpotState = data.jackpot;
+        renderJackpotState();
+    } catch (error) {
+        console.error('Jackpot state failed:', error);
+    }
+}
+
+function renderJackpotState() {
+    const state = jackpotState || {
+        status: 'open',
+        maxPlayers: 10,
+        playerCount: 0,
+        pot: 0,
+        entries: [],
+        history: []
+    };
+    const pot = Number(state.pot || 0);
+    const entries = Array.isArray(state.entries) ? state.entries : [];
+    const currentEntry = entries.find((entry) => entry.username === currentPlayer?.username);
+    const typedAmount = readAmountInput('jackpotBetAmount');
+    const projectedAmount = currentEntry ? Number(currentEntry.amount || 0) : Math.max(0, Number.isFinite(typedAmount) ? typedAmount : 0);
+    const projectedPot = currentEntry ? pot : pot + projectedAmount;
+    const projectedChance = projectedPot > 0 && projectedAmount > 0 ? (projectedAmount / projectedPot) * 100 : 0;
+
+    const potEl = document.getElementById('jackpotPot');
+    const statusEl = document.getElementById('jackpotStatus');
+    const timerEl = document.getElementById('jackpotTimer');
+    const seatsEl = document.getElementById('jackpotSeats');
+    const chanceEl = document.getElementById('jackpotChance');
+    const entriesEl = document.getElementById('jackpotEntries');
+    const historyEl = document.getElementById('jackpotHistory');
+    const joinButton = document.getElementById('jackpotJoinBtn');
+
+    if (potEl) potEl.textContent = `$${formatAmount(pot)}`;
+    if (timerEl) timerEl.textContent = state.status === 'drawing' ? 'Drawing' : getJackpotCountdown(state.closesAt);
+    if (seatsEl) seatsEl.textContent = `${entries.length} / ${state.maxPlayers || 10} seats`;
+    if (chanceEl) chanceEl.textContent = `${projectedChance.toFixed(2)}%`;
+
+    if (statusEl) {
+        if (state.status === 'complete' && state.winner) {
+            statusEl.textContent = `${state.winner.username} won the $${formatAmount(state.winner.payout)} pool.`;
+        } else if (state.status === 'drawing') {
+            statusEl.textContent = 'Drawing the weighted winner...';
+        } else if (entries.length < 2) {
+            statusEl.textContent = 'Needs at least 2 players to start the timer.';
+        } else {
+            statusEl.textContent = 'Round is live. The biggest slice has the best chance.';
+        }
+    }
+
+    if (entriesEl) {
+        entriesEl.innerHTML = entries.length > 0
+            ? entries.map((entry, index) => `
+                <div class="jackpot-entry ${entry.username === currentPlayer?.username ? 'is-you' : ''}">
+                    <img src="${createChatAvatarUrl(entry.username)}" alt="${entry.username} skin" loading="lazy">
+                    <div>
+                        <strong>${index + 1}. ${entry.username}</strong>
+                        <span>$${formatAmount(entry.amount)} bet</span>
+                    </div>
+                    <em>${Number(entry.chance || 0).toFixed(2)}%</em>
+                </div>
+            `).join('')
+            : '<div class="feed-empty-state">No players in the pool yet.</div>';
+    }
+
+    if (historyEl) {
+        const history = Array.isArray(state.history) ? state.history : [];
+        historyEl.innerHTML = history.length > 0
+            ? history.slice(0, 4).map((round) => `
+                <div class="jackpot-history-row">
+                    <span>${round.winner?.username || 'Winner'}</span>
+                    <strong>$${formatAmount(round.pot || round.winner?.payout || 0)}</strong>
+                </div>
+            `).join('')
+            : '';
+    }
+
+    if (joinButton) {
+        const disabled = isBetaMode || !currentPlayer || !!currentEntry || state.status !== 'open' || entries.length >= (state.maxPlayers || 10);
+        joinButton.disabled = disabled;
+        joinButton.innerHTML = currentEntry
+            ? '<i class="fas fa-lock"></i> You Are In'
+            : state.status !== 'open'
+                ? '<i class="fas fa-spinner fa-spin"></i> Drawing...'
+                : '<i class="fas fa-vault"></i> Join Jackpot';
+    }
+}
+
+async function joinJackpot() {
+    if (!currentPlayer || isBetaMode) {
+        showNotification('Login with a real account to join Jackpot.', 'info');
+        return;
+    }
+
+    const amount = readAmountInput('jackpotBetAmount');
+    if (!amount || amount <= 0) {
+        showNotification('Enter a valid jackpot bet amount.', 'error');
+        return;
+    }
+
+    if (amount > currentPlayer.balance) {
+        showNotification('Insufficient website wallet balance.', 'error');
+        return;
+    }
+
+    if (!startGameAction('jackpot', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
+    const joinButton = document.getElementById('jackpotJoinBtn');
+    if (joinButton) {
+        joinButton.disabled = true;
+        joinButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Joining...';
+    }
+
+    try {
+        const response = await fetch('/api/game/jackpot/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount })
+        });
+        const data = await readJsonResponse(response, 'Could not join Jackpot');
+        hydratePlayerStateFromResult(data);
+        jackpotState = data.jackpot;
+        renderJackpotState();
+        showNotification(`Joined Jackpot with $${formatAmount(amount)}.`, 'success');
+        playGameSound('bet-place');
+    } catch (error) {
+        showNotification(error.message || 'Could not join Jackpot', 'error');
+    } finally {
+        finishGameAction('jackpot', LONG_GAME_COOLDOWN_MS);
+        renderJackpotState();
+    }
+}
+
 function loadKenoGame(container) {
     container.innerHTML = `
         <div class="game-container">
@@ -3786,3 +4101,5 @@ async function playKeno() {
 
 window.handleCrashRealtimeState = handleCrashRealtimeState;
 window.handleCrashBetSettlement = handleCrashBetSettlement;
+window.handleJackpotState = handleJackpotState;
+window.cleanupGameRuntime = cleanupGameRuntime;

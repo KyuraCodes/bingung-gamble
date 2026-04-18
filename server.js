@@ -35,6 +35,8 @@ let globalBetStats = {
 };
 const connectedWebsiteUsers = new Map();
 const websiteUserSockets = new Map();
+const minecraftOnlineUsers = new Set();
+let minecraftPresenceSyncedAt = 0;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -126,13 +128,17 @@ function emitToWebsiteUser(username, event, payload) {
 }
 
 function getPresencePayload() {
-    const usernames = [...new Set(connectedWebsiteUsers.values())];
+    const websiteUsernames = [...new Set(connectedWebsiteUsers.values())];
+    const minecraftUsernames = [...minecraftOnlineUsers];
+    const usingMinecraftPresence = minecraftPresenceSyncedAt > 0;
+    const usernames = usingMinecraftPresence ? minecraftUsernames : websiteUsernames;
 
     return {
         onlinePlayers: usernames.length,
         usernames: usernames.slice(0, 12),
-        source: 'website',
-        syncedAt: Date.now()
+        websiteOnlinePlayers: websiteUsernames.length,
+        source: usingMinecraftPresence ? 'minecraft' : 'website',
+        syncedAt: usingMinecraftPresence ? minecraftPresenceSyncedAt : Date.now()
     };
 }
 
@@ -170,9 +176,22 @@ function requireMinecraftBridgeAuth(req, res, next) {
 }
 
 app.post('/api/realtime/minecraft/presence', requireMinecraftBridgeAuth, (req, res) => {
+    const usernames = Array.isArray(req.body?.usernames) ? req.body.usernames : [];
+    minecraftOnlineUsers.clear();
+    usernames
+        .map((username) => sanitizeUsername(username, ''))
+        .filter(Boolean)
+        .slice(0, 80)
+        .forEach((username) => minecraftOnlineUsers.add(username));
+    minecraftPresenceSyncedAt = Date.now();
+
+    const presence = getPresencePayload();
+    broadcastPresence();
+    emitGlobalStats();
+
     res.json({
         success: true,
-        presence: getPresencePayload()
+        presence
     });
 });
 
@@ -394,6 +413,10 @@ io.on('connection', (socket) => {
 });
 
 global.emitToWebsiteUser = emitToWebsiteUser;
+
+global.broadcastJackpotState = (payload) => {
+    io.emit('jackpot:state', payload);
+};
 
 global.broadcastBet = (betData) => {
     globalBetStats.totalBets += 1;

@@ -1,6 +1,6 @@
 let currentPlayer = null;
 let socket = null;
-let isBetaMode = false;
+const isBetaMode = false;
 let currentGame = 'crash';
 let playerStats = null;
 let audioContext = null;
@@ -103,14 +103,6 @@ const GAME_META = {
         description: 'Name your target, roll for the ceiling, and let the number either clear or miss.',
         icon: 'fa-wave-square'
     },
-    keno: {
-        title: 'Keno',
-        eyebrow: 'Draw Board',
-        chip: 'Pattern Pick',
-        stage: 'Number Grid',
-        description: 'Build a ticket, catch enough matches, and turn patience into a spike.',
-        icon: 'fa-table-cells-large'
-    },
     cases: {
         title: 'Cases',
         eyebrow: 'Prize Vault',
@@ -119,13 +111,13 @@ const GAME_META = {
         description: 'Open premium cases, roll rarity, and hope the vault lights up for you.',
         icon: 'fa-box-open'
     },
-    casebattles: {
-        title: 'Case Battles',
-        eyebrow: 'Pot Arena',
-        chip: 'Battle Pool',
-        stage: 'Battle Lobby',
-        description: 'Queue a battle, let bots fill the seats, and take the highest total from the round.',
-        icon: 'fa-people-group'
+    jackpot: {
+        title: 'Jackpot',
+        eyebrow: 'Shared Pot',
+        chip: '10 Seats',
+        stage: 'Jackpot Vault',
+        description: 'Join the pool, own your percentage, and let one weighted draw take the pot.',
+        icon: 'fa-vault'
     },
     dailyrewards: {
         title: 'Daily Rewards',
@@ -146,12 +138,6 @@ const GAME_META = {
 };
 
 const GAME_ORDER = Object.keys(GAME_META);
-
-const BETA_STAT_SEED = {
-    totalWagered: 5820000,
-    wins: 418,
-    biggestWin: 1260000
-};
 
 const EMPTY_GLOBAL_STATS = {
     onlinePlayers: 0,
@@ -194,7 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupGlobalClickAudio();
     unlockAudioOnInteraction();
     setupLoginForm();
-    setupBetaMode();
     setupNavigation();
     setupLogout();
     setupLiveChat();
@@ -609,6 +594,12 @@ function dispatchSiteNotification(message, type = 'info') {
     const stack = document.getElementById('notificationStack');
     if (!stack) return;
 
+    const duplicate = Array.from(stack.querySelectorAll('.notification-text'))
+        .some((item) => item.textContent === message);
+    if (duplicate) {
+        return;
+    }
+
     const meta = getNotificationMeta(type);
     const note = document.createElement('div');
     note.className = `notification ${type}`;
@@ -637,7 +628,7 @@ function dispatchSiteNotification(message, type = 'info') {
 
     stack.prepend(note);
 
-    while (stack.children.length > 4) {
+    while (stack.children.length > 3) {
         stack.removeChild(stack.lastChild);
     }
 
@@ -650,7 +641,7 @@ function dispatchSiteNotification(message, type = 'info') {
     setTimeout(() => {
         note.classList.remove('visible');
         setTimeout(() => note.remove(), 260);
-    }, 3400);
+    }, 2400);
 }
 
 function getFallbackAvatarUrl(username) {
@@ -672,8 +663,49 @@ function getNormalizedGlobalStats(stats = {}) {
     };
 }
 
-function updateOnlinePresenceDisplay(count) {
-    const onlineCount = Number(count || 0);
+function updateOnlinePlayerSkins(usernames = []) {
+    const container = document.getElementById('onlinePlayerSkins');
+    if (!container) return;
+
+    const names = [...new Set((Array.isArray(usernames) ? usernames : [])
+        .map((name) => String(name || '').trim())
+        .filter(Boolean))]
+        .slice(0, 10);
+
+    if (names.length === 0) {
+        container.innerHTML = '<span class="story-avatar-empty">No live website players yet</span>';
+        return;
+    }
+
+    container.innerHTML = '';
+    names.forEach((username) => {
+        const button = document.createElement('button');
+        button.className = 'story-avatar-button';
+        button.type = 'button';
+        button.title = username;
+        button.setAttribute('aria-label', `${username} is online`);
+
+        const image = document.createElement('img');
+        image.src = createChatAvatarUrl(username);
+        image.alt = `${username} skin`;
+        image.dataset.avatarName = username;
+        image.dataset.avatarSize = '48';
+        image.loading = 'lazy';
+
+        const label = document.createElement('span');
+        label.textContent = username;
+
+        button.append(image, label);
+        container.appendChild(button);
+    });
+    setupImageFallbacks(container);
+}
+
+function updateOnlinePresenceDisplay(presence = {}) {
+    const onlineCount = typeof presence === 'number'
+        ? Number(presence || 0)
+        : Number(presence.onlinePlayers || 0);
+    const usernames = typeof presence === 'number' ? [] : presence.usernames || [];
     const onlineLabel = `${onlineCount}`;
     const onlineSummary = `${onlineCount} online now`;
 
@@ -693,11 +725,16 @@ function updateOnlinePresenceDisplay(count) {
     if (chatPresence) {
         chatPresence.textContent = onlineSummary;
     }
+
+    updateOnlinePlayerSkins(usernames);
 }
 
 function updateGlobalStatsDisplay(stats = {}) {
     globalRealtimeStats = getNormalizedGlobalStats(stats);
-    updateOnlinePresenceDisplay(globalRealtimeStats.onlinePlayers);
+    updateOnlinePresenceDisplay({
+        onlinePlayers: globalRealtimeStats.onlinePlayers,
+        usernames: stats.usernames || []
+    });
 
     const liveFeedStatus = document.getElementById('liveFeedStatus');
     if (liveFeedStatus) {
@@ -786,7 +823,6 @@ function setupProvablyFairPanel() {
         if (event.target.id !== 'provablyFairForm') return;
 
         event.preventDefault();
-        if (isBetaMode) return;
 
         const input = document.getElementById('provablyFairClientSeed');
         const clientSeed = input ? input.value.trim() : '';
@@ -815,7 +851,7 @@ function setupProvablyFairPanel() {
         }
 
         const rotateButton = event.target.closest('[data-fairness-action="rotate"]');
-        if (!rotateButton || isBetaMode) return;
+        if (!rotateButton) return;
 
         rotateButton.disabled = true;
 
@@ -845,34 +881,10 @@ function renderProvablyFairPanel() {
         return;
     }
 
-    if (isBetaMode) {
-        panel.innerHTML = `
-            <div class="fairness-shell ${provablyFairExpanded ? 'expanded' : ''}">
-                <button class="fairness-toggle" type="button" data-fairness-action="toggle">
-                    <span class="fairness-toggle-copy">
-                        <span class="fairness-toggle-title">Provably Fair</span>
-                        <span class="fairness-toggle-subtitle">Open the fairness drawer on a real account session.</span>
-                    </span>
-                    <span class="fairness-toggle-badge">${provablyFairExpanded ? 'Hide' : 'View'}</span>
-                </button>
-                <div class="fairness-drawer">
-                    <div class="fairness-card is-beta">
-                        <div>
-                            <span class="fairness-kicker">Provably Fair</span>
-                            <strong>Live fairness unlocks on real account sessions.</strong>
-                            <p>Cases, dice, plinko, roulette, coinflip, wheel, limbo, and keno use server-seeded rolls outside beta mode.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
     const state = provablyFairState || normalizeProvablyFairState();
     const supportedGames = state.supportedGames.length > 0
         ? state.supportedGames.filter((game) => game !== 'cases').join(', ')
-        : 'cases, dice, plinko, roulette, coinflip, wheel, limbo, keno';
+        : 'cases, dice, plinko, roulette, coinflip, wheel, limbo';
     const shortHash = state.serverSeedHash.length > 20
         ? `${state.serverSeedHash.slice(0, 12)}...${state.serverSeedHash.slice(-6)}`
         : state.serverSeedHash;
@@ -925,11 +937,6 @@ function renderProvablyFairPanel() {
 
 async function loadProvablyFairState() {
     if (!currentPlayer) return;
-
-    if (isBetaMode) {
-        renderProvablyFairPanel();
-        return;
-    }
 
     try {
         const response = await fetch('/api/game/fairness');
@@ -1044,7 +1051,7 @@ function setupLiveChat() {
     form.addEventListener('submit', (event) => {
         event.preventDefault();
 
-        if (!currentPlayer || isBetaMode) {
+        if (!currentPlayer) {
             showNotification('Login with a real account to use website chat.', 'info');
             return;
         }
@@ -1065,7 +1072,7 @@ function setupLiveChat() {
 }
 
 function openTipModal(username) {
-    if (!currentPlayer || isBetaMode) {
+    if (!currentPlayer) {
         showNotification('Login with a real account to tip players.', 'info');
         return;
     }
@@ -1160,13 +1167,13 @@ function refreshLiveChatAvailability() {
     if (!form || !input) return;
 
     const submitButton = form.querySelector("button[type='submit']");
-    const enabled = !!currentPlayer && !isBetaMode;
+    const enabled = !!currentPlayer;
 
     input.disabled = !enabled;
     input.readOnly = !enabled;
     input.placeholder = enabled
         ? 'Talk to players on the website'
-        : (isBetaMode ? 'Live chat needs a real account session' : 'Login to join website chat');
+        : 'Login to join website chat';
 
     if (submitButton) {
         submitButton.disabled = !enabled;
@@ -1175,7 +1182,7 @@ function refreshLiveChatAvailability() {
 }
 
 function refreshWalletTransferAvailability() {
-    const enabled = !!currentPlayer && !isBetaMode;
+    const enabled = !!currentPlayer;
 
     ['deposit', 'withdraw'].forEach((type) => {
         const form = document.getElementById(type === 'deposit' ? 'walletDepositForm' : 'walletWithdrawForm');
@@ -1206,7 +1213,7 @@ function setWalletTransferBusy(type, busy) {
 }
 
 async function submitWalletTransfer(type) {
-    if (!currentPlayer || isBetaMode) {
+    if (!currentPlayer) {
         showNotification('Login with a real account to move funds.', 'info');
         return;
     }
@@ -1579,7 +1586,6 @@ function setupLoginForm() {
                 return;
             }
 
-            isBetaMode = false;
             setCurrentPlayerState(data.player);
             playerStats = null;
             showMainScreen();
@@ -1587,29 +1593,6 @@ function setupLoginForm() {
             errorDiv.textContent = 'Connection error. Please try again.';
             console.error('Login error:', error);
         }
-    });
-}
-
-function setupBetaMode() {
-    const betaBtn = document.getElementById('betaModeBtn');
-
-    betaBtn.addEventListener('click', () => {
-        setCurrentPlayerState({
-            username: 'BetaPlayer',
-            balance: 99000000,
-            walletBalance: 99000000,
-            vaultBalance: 99000000,
-            level: 99,
-            maxLevel: 100,
-            xp: 99000,
-            xpToNextLevel: 50000,
-            xpIntoLevel: 12000,
-            levelProgress: 0.42
-        });
-
-        isBetaMode = true;
-        playerStats = { ...BETA_STAT_SEED };
-        showMainScreen();
     });
 }
 
@@ -1626,12 +1609,6 @@ function setupNavigation() {
 
 function setupLogout() {
     document.getElementById('logoutBtn').addEventListener('click', async () => {
-        if (isBetaMode) {
-            resetSocketConnection();
-            location.reload();
-            return;
-        }
-
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
             resetSocketConnection();
@@ -1903,6 +1880,9 @@ function updateGameChrome(game) {
 
 function loadGame(game) {
     const gameContent = document.getElementById('gameContent');
+    if (window.cleanupGameRuntime) {
+        window.cleanupGameRuntime();
+    }
     gameContent.dataset.activeGame = game;
     const loader = window[loaderName(game)];
 
@@ -1961,7 +1941,7 @@ async function connectSocket() {
     });
 
     socket.on('presence:update', (presence) => {
-        updateOnlinePresenceDisplay(presence?.onlinePlayers || 0);
+        updateOnlinePresenceDisplay(presence || {});
     });
 
     socket.on('global:stats', (stats) => {
@@ -1993,6 +1973,12 @@ async function connectSocket() {
         }
     });
 
+    socket.on('jackpot:state', (payload) => {
+        if (window.handleJackpotState) {
+            window.handleJackpotState(payload);
+        }
+    });
+
     socket.on('wallet:updated', (payload) => {
         hydratePlayerStateFromResult({
             newBalance: payload?.walletBalance,
@@ -2004,11 +1990,6 @@ async function connectSocket() {
 
 async function loadDashboardStats() {
     if (!currentPlayer) return;
-
-    if (isBetaMode) {
-        updateStatsDisplay(playerStats || { ...BETA_STAT_SEED });
-        return;
-    }
 
     try {
         const response = await fetch('/api/player/stats');
@@ -2129,18 +2110,8 @@ function reserveDisplayedBalance(amount) {
     updatePlayerInfo();
 }
 
-function ensureBetaStats() {
-    if (!playerStats) {
-        playerStats = { ...BETA_STAT_SEED };
-    }
-}
-
 async function playServerGame({ gameType = currentGame, amount, payload = {} }) {
     const wager = Number(amount || 0);
-
-    if (isBetaMode) {
-        return null;
-    }
 
     try {
         const response = await fetch('/api/game/play', {
@@ -2176,47 +2147,6 @@ async function settleWager({ amount, payout, multiplier, won, gameType = current
     const didWin = typeof won === 'boolean' ? won : finalPayout > wager;
     const profit = finalPayout - wager;
 
-    if (isBetaMode) {
-        ensureBetaStats();
-        currentPlayer.balance += finalPayout;
-        currentPlayer.walletBalance = currentPlayer.balance;
-        currentPlayer.xp = (currentPlayer.xp || 0) + Math.floor(Math.log10(wager + 1) * 16 + (didWin ? 12 : 4));
-        currentPlayer.level = Math.min(currentPlayer.maxLevel || 100, Math.max(currentPlayer.level || 1, Math.floor(currentPlayer.xp / 100000) + 1));
-        updatePlayerInfo();
-
-        playerStats.totalWagered += wager;
-        playerStats.wins += didWin ? 1 : 0;
-        playerStats.biggestWin = Math.max(playerStats.biggestWin, Math.max(0, profit));
-        updateStatsDisplay(playerStats);
-
-        addLiveBet({
-            username: currentPlayer.username,
-            amount: wager,
-            multiplier: finalMultiplier,
-            won: didWin,
-            profit,
-            gameType,
-            timestamp: Date.now()
-        }, false);
-
-        updateGlobalStatsDisplay({
-            ...(globalRealtimeStats || EMPTY_GLOBAL_STATS),
-            totalBets: Number((globalRealtimeStats || EMPTY_GLOBAL_STATS).totalBets || 0) + 1,
-            totalWins: Number((globalRealtimeStats || EMPTY_GLOBAL_STATS).totalWins || 0) + (didWin ? 1 : 0),
-            totalLosses: Number((globalRealtimeStats || EMPTY_GLOBAL_STATS).totalLosses || 0) + (didWin ? 0 : 1),
-            totalWagered: Number((globalRealtimeStats || EMPTY_GLOBAL_STATS).totalWagered || 0) + wager,
-            netProfit: Number((globalRealtimeStats || EMPTY_GLOBAL_STATS).netProfit || 0) + profit
-        });
-
-        return {
-            success: true,
-            newBalance: currentPlayer.balance,
-            level: currentPlayer.level,
-            payout: finalPayout,
-            profit,
-            won: didWin
-        };
-    }
 
     try {
         const response = await fetch('/api/game/settle', {

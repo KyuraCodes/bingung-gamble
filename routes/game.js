@@ -56,7 +56,8 @@ const WHEEL_SEGMENT_MAP = {
     medium: [0.12, 0.45, 0.92, 1.75, 4.4, 1.75, 0.92, 0.45],
     high: [0.02, 0.12, 0.38, 1.45, 16, 1.45, 0.38, 0.12]
 };
-const KENO_PAYOUTS = { 5: 1.15, 6: 1.8, 7: 3.2, 8: 6.4, 9: 12, 10: 24 };
+const JACKPOT_MAX_PLAYERS = 10;
+const JACKPOT_ROUND_MS = 30000;
 const KNOWN_GAME_TYPES = new Set([
     'casino',
     'crash',
@@ -69,13 +70,12 @@ const KNOWN_GAME_TYPES = new Set([
     'coinflip',
     'wheel',
     'limbo',
-    'keno',
     'slots',
     'cases',
-    'casebattles'
+    'jackpot'
 ]);
-const SERVER_PLAY_GAME_TYPES = new Set(['dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo', 'keno']);
-const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'slots', 'casebattles']);
+const SERVER_PLAY_GAME_TYPES = new Set(['dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo']);
+const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'slots']);
 const MAX_MULTIPLIER_BY_GAME = {
     casino: 40,
     crash: 80,
@@ -88,14 +88,25 @@ const MAX_MULTIPLIER_BY_GAME = {
     coinflip: COINFLIP_PAYOUT,
     wheel: 24,
     limbo: LIMBO_MAX_TARGET,
-    keno: 24,
     slots: 24,
     cases: 12,
-    casebattles: 4
+    jackpot: 100
 };
 let crashIo = null;
 let crashRoundCounter = 0;
 const serverActionCooldowns = new Map();
+let jackpotRoundCounter = 0;
+const jackpotRoundState = {
+    roundId: Date.now(),
+    status: 'open',
+    entries: [],
+    pot: 0,
+    closesAt: null,
+    winner: null,
+    timer: null,
+    resolving: false,
+    history: []
+};
 const crashRoundState = {
     phase: 'betting',
     roundId: 0,
@@ -496,6 +507,213 @@ function broadcastBet(payload) {
     });
 }
 
+function buildJackpotEntries(entries = jackpotRoundState.entries, pot = jackpotRoundState.pot) {
+    const safePot = Math.max(0, Number(pot || 0));
+    return entries.map((entry) => ({
+        username: entry.username,
+        amount: toMoney(entry.amount),
+        chance: safePot > 0 ? toMoney((entry.amount / safePot) * 100) : 0,
+        joinedAt: entry.joinedAt
+    }));
+}
+
+function getJackpotStateSnapshot() {
+    return {
+        roundId: jackpotRoundState.roundId,
+        status: jackpotRoundState.status,
+        maxPlayers: JACKPOT_MAX_PLAYERS,
+        playerCount: jackpotRoundState.entries.length,
+        pot: toMoney(jackpotRoundState.pot),
+        closesAt: jackpotRoundState.closesAt,
+        winner: jackpotRoundState.winner,
+        entries: buildJackpotEntries(),
+        history: jackpotRoundState.history.slice(0, 8)
+    };
+}
+
+function emitJackpotState() {
+    if (global.broadcastJackpotState) {
+        global.broadcastJackpotState(getJackpotStateSnapshot());
+    }
+}
+
+function resetJackpotRound() {
+    if (jackpotRoundState.timer) {
+        clearTimeout(jackpotRoundState.timer);
+    }
+
+    jackpotRoundCounter += 1;
+    jackpotRoundState.roundId = Date.now() + jackpotRoundCounter;
+    jackpotRoundState.status = 'open';
+    jackpotRoundState.entries = [];
+    jackpotRoundState.pot = 0;
+    jackpotRoundState.closesAt = null;
+    jackpotRoundState.winner = null;
+    jackpotRoundState.timer = null;
+    jackpotRoundState.resolving = false;
+    emitJackpotState();
+}
+
+function scheduleJackpotDraw(delayMs = JACKPOT_ROUND_MS) {
+    if (jackpotRoundState.timer || jackpotRoundState.resolving || jackpotRoundState.entries.length < 2) {
+        return;
+    }
+
+    jackpotRoundState.closesAt = Date.now() + delayMs;
+    jackpotRoundState.timer = setTimeout(() => {
+        resolveJackpotRound().catch((error) => {
+            console.error('Jackpot draw failed:', error);
+            jackpotRoundState.resolving = false;
+            jackpotRoundState.status = 'open';
+            jackpotRoundState.timer = null;
+            jackpotRoundState.closesAt = null;
+            emitJackpotState();
+        });
+    }, delayMs);
+    emitJackpotState();
+}
+
+function pickJackpotWinner(entries, pot) {
+    const roll = Math.random() * pot;
+    let cursor = 0;
+
+    for (const entry of entries) {
+        cursor += entry.amount;
+        if (roll <= cursor) {
+            return { winner: entry, roll };
+        }
+    }
+
+    return { winner: entries[entries.length - 1], roll };
+}
+
+async function resolveJackpotRound() {
+    if (jackpotRoundState.resolving || jackpotRoundState.entries.length < 2) {
+        return;
+    }
+
+    jackpotRoundState.resolving = true;
+    jackpotRoundState.status = 'drawing';
+    if (jackpotRoundState.timer) {
+        clearTimeout(jackpotRoundState.timer);
+        jackpotRoundState.timer = null;
+    }
+    emitJackpotState();
+
+    const entries = jackpotRoundState.entries.map((entry) => ({ ...entry }));
+    const pot = toMoney(entries.reduce((total, entry) => total + Number(entry.amount || 0), 0));
+    const { winner, roll } = pickJackpotWinner(entries, pot);
+    const usernames = [...new Set(entries.map((entry) => entry.username))];
+    let connection;
+    const walletUpdates = [];
+
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const [players] = await connection.query(
+            'SELECT username, balance, wallet_balance, xp, level FROM players WHERE username IN (?) FOR UPDATE',
+            [usernames]
+        );
+        const playersByName = new Map(players.map((player) => [player.username, player]));
+
+        for (const entry of entries) {
+            const player = playersByName.get(entry.username);
+            if (!player) {
+                continue;
+            }
+
+            const won = entry.username === winner.username;
+            const payout = won ? pot : 0;
+            const profit = toMoney(payout - entry.amount);
+            const nextWallet = toMoney(Number(player.wallet_balance || 0) + payout);
+            const xpGained = getWagerXpGain(entry.amount, won);
+            const updatedXp = Number(player.xp || 0) + xpGained;
+            const computedLevel = getLevelFromXp(updatedXp);
+            const multiplier = won && entry.amount > 0 ? toMoney(pot / entry.amount) : 0;
+
+            await connection.query(
+                `UPDATE players
+                 SET wallet_balance = ?, total_wagered = total_wagered + ?, total_won = total_won + ?, xp = ?, level = ?
+                 WHERE username = ?`,
+                [nextWallet, entry.amount, payout, updatedXp, computedLevel, entry.username]
+            );
+
+            await insertBetRecord(connection, {
+                username: entry.username,
+                gameType: 'jackpot',
+                amount: entry.amount,
+                multiplier,
+                payout,
+                profit,
+                won
+            });
+
+            walletUpdates.push({
+                username: entry.username,
+                walletBalance: nextWallet,
+                vaultBalance: Number(player.balance || 0),
+                level: computedLevel,
+                xpGained,
+                bet: {
+                    username: entry.username,
+                    gameType: 'jackpot',
+                    amount: entry.amount,
+                    multiplier,
+                    payout,
+                    profit,
+                    won,
+                    newBalance: nextWallet
+                }
+            });
+        }
+
+        await connection.commit();
+
+        walletUpdates.forEach((update) => {
+            broadcastBet(update.bet);
+            if (global.emitToWebsiteUser) {
+                global.emitToWebsiteUser(update.username, 'wallet:updated', {
+                    username: update.username,
+                    walletBalance: update.walletBalance,
+                    vaultBalance: update.vaultBalance,
+                    source: 'jackpot',
+                    syncedAt: Date.now()
+                });
+            }
+        });
+
+        jackpotRoundState.status = 'complete';
+        jackpotRoundState.winner = {
+            username: winner.username,
+            amount: toMoney(winner.amount),
+            chance: pot > 0 ? toMoney((winner.amount / pot) * 100) : 0,
+            payout: pot
+        };
+        jackpotRoundState.history.unshift({
+            roundId: jackpotRoundState.roundId,
+            winner: jackpotRoundState.winner,
+            pot,
+            roll: toMoney(roll),
+            entries: buildJackpotEntries(entries, pot),
+            completedAt: Date.now()
+        });
+        jackpotRoundState.history = jackpotRoundState.history.slice(0, 8);
+        emitJackpotState();
+
+        setTimeout(resetJackpotRound, 6500);
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        throw error;
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+}
+
 function calculateCrashMultiplier(startedAt) {
     const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
     const multiplier = Math.exp(elapsedSeconds * 0.34);
@@ -505,7 +723,7 @@ function calculateCrashMultiplier(startedAt) {
 function generateCrashPoint() {
     const random = Math.random();
     const point = CRASH_EDGE / Math.max(0.0001, 1 - random);
-    return toMoney(Math.max(1.01, Math.min(80, point)));
+    return toMoney(Math.max(1, Math.min(80, point)));
 }
 
 function getCrashUserBet(username) {
@@ -865,44 +1083,6 @@ function resolveServerGame({ gameType, amount, body, profile, nonceUsed }) {
         };
     }
 
-    if (gameType === 'keno') {
-        const selectedNumbers = Array.isArray(body.selectedNumbers)
-            ? [...new Set(body.selectedNumbers.map((value) => Math.floor(readNumber(value))))]
-                .filter((value) => value >= 1 && value <= 40)
-                .slice(0, 10)
-            : [];
-
-        if (selectedNumbers.length === 0) {
-            return buildError(400, 'Select at least 1 number');
-        }
-
-        const drawn = [];
-        let cursor = 0;
-        while (drawn.length < 20) {
-            const candidate = rollInt({
-                serverSeed: profile.server_seed,
-                clientSeed: profile.client_seed,
-                nonce: nonceUsed,
-                cursor,
-                maxExclusive: 40
-            }) + 1;
-            cursor += 1;
-            if (!drawn.includes(candidate)) {
-                drawn.push(candidate);
-            }
-        }
-
-        const matches = selectedNumbers.filter((value) => drawn.includes(value)).length;
-        const multiplier = KENO_PAYOUTS[matches] || 0;
-        return {
-            amount,
-            payout: multiplier > 0 ? toMoney(amount * multiplier) : 0,
-            multiplier,
-            won: multiplier > 0,
-            meta: { selectedNumbers, drawn, matches, fairness: buildFairnessPayload(profile, nonceUsed, { roll: matches / Math.max(1, selectedNumbers.length) }) }
-        };
-    }
-
     return buildError(400, 'Unsupported game');
 }
 
@@ -1030,6 +1210,98 @@ router.post('/crash/cashout', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Crash cashout error:', error);
         return res.status(500).json({ success: false, message: 'Could not cash out crash bet' });
+    }
+});
+
+router.get('/jackpot/state', (req, res) => {
+    res.json({ success: true, jackpot: getJackpotStateSnapshot() });
+});
+
+router.post('/jackpot/join', requireAuth, async (req, res) => {
+    const username = req.session.username;
+    const amount = toMoney(req.body.amount);
+
+    if (!claimServerActionCooldown(username, 'jackpot:join', 1200)) {
+        return res.status(429).json({ success: false, message: 'Slow down before joining Jackpot again' });
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid jackpot bet amount' });
+    }
+
+    if (jackpotRoundState.status !== 'open') {
+        return res.status(409).json({ success: false, message: 'Jackpot is drawing. Wait for the next pool.' });
+    }
+
+    if (jackpotRoundState.entries.length >= JACKPOT_MAX_PLAYERS) {
+        return res.status(409).json({ success: false, message: 'Jackpot pool is full.' });
+    }
+
+    if (jackpotRoundState.entries.some((entry) => entry.username === username)) {
+        return res.status(409).json({ success: false, message: 'You are already in this Jackpot round.' });
+    }
+
+    let connection;
+
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const [playerRows] = await connection.query(
+            'SELECT balance, wallet_balance FROM players WHERE username = ? FOR UPDATE',
+            [username]
+        );
+
+        if (playerRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        const currentBalance = readWalletBalance(playerRows[0]);
+        if (currentBalance < amount) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Insufficient website wallet balance' });
+        }
+
+        const newBalance = toMoney(currentBalance - amount);
+        await connection.query(
+            'UPDATE players SET wallet_balance = ? WHERE username = ?',
+            [newBalance, username]
+        );
+
+        await connection.commit();
+
+        jackpotRoundState.entries.push({
+            username,
+            amount,
+            joinedAt: Date.now()
+        });
+        jackpotRoundState.pot = toMoney(jackpotRoundState.pot + amount);
+
+        if (jackpotRoundState.entries.length >= JACKPOT_MAX_PLAYERS) {
+            scheduleJackpotDraw(900);
+        } else if (jackpotRoundState.entries.length >= 2) {
+            scheduleJackpotDraw();
+        } else {
+            emitJackpotState();
+        }
+
+        return res.json({
+            success: true,
+            amount,
+            newBalance,
+            jackpot: getJackpotStateSnapshot()
+        });
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Jackpot join error:', error);
+        return res.status(500).json({ success: false, message: 'Could not join Jackpot' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
     }
 });
 
@@ -1240,8 +1512,9 @@ router.post('/play', requireAuth, async (req, res) => {
     const amount = toMoney(req.body.amount);
     const gameType = sanitizeGameType(req.body.gameType);
     const requestId = sanitizeRequestId(req.body.requestId);
+    const playCooldownMs = gameType === 'plinko' ? 35 : GAME_ACTION_SERVER_COOLDOWN_MS;
 
-    if (!claimServerActionCooldown(username, `play:${gameType}`)) {
+    if (!claimServerActionCooldown(username, `play:${gameType}`, playCooldownMs)) {
         return res.status(429).json({ success: false, message: 'Slow down before starting another round' });
     }
 
