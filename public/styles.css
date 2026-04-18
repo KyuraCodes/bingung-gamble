@@ -334,13 +334,16 @@ a {
     border: 1px solid rgba(124, 199, 255, 0.24);
     border-radius: 8px;
     box-shadow: var(--shadow-tight);
+    display: grid;
     font-size: 0.72rem;
     font-weight: 800;
+    gap: 2px;
     left: 50%;
-    max-width: 118px;
+    max-width: 156px;
+    min-width: 128px;
     opacity: 0;
     overflow: hidden;
-    padding: 5px 8px;
+    padding: 7px 9px;
     pointer-events: none;
     position: absolute;
     text-overflow: ellipsis;
@@ -349,6 +352,19 @@ a {
     transition: opacity 0.18s ease, transform 0.18s ease;
     white-space: nowrap;
     z-index: 12;
+}
+
+.story-avatar-button span strong,
+.story-avatar-button span small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.story-avatar-button span small {
+    color: var(--accent-success);
+    font-size: 0.68rem;
+    font-weight: 800;
 }
 
 .story-avatar-button:hover img,
@@ -966,6 +982,85 @@ select.bet-input:focus {
     min-width: 140px;
 }
 
+.quick-wallet-panel {
+    align-items: center;
+    background:
+        linear-gradient(135deg, rgba(156, 255, 110, 0.1), rgba(61, 219, 217, 0.08)),
+        linear-gradient(180deg, rgba(13, 27, 31, 0.96), rgba(6, 15, 20, 0.98));
+    border: 1px solid rgba(156, 255, 110, 0.18);
+    border-radius: 8px;
+    box-shadow: 0 18px 38px rgba(2, 8, 23, 0.32);
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    margin-bottom: 18px;
+    padding: 14px;
+}
+
+.quick-wallet-balances,
+.quick-wallet-actions {
+    display: grid;
+    gap: 10px;
+}
+
+.quick-wallet-balances {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-wallet-balances div {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(124, 199, 255, 0.12);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.quick-wallet-balances span,
+.quick-wallet-form label span {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.quick-wallet-balances strong {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.1rem;
+}
+
+.quick-wallet-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-wallet-form {
+    align-items: end;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.quick-wallet-form input {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(124, 199, 255, 0.15);
+    border-radius: 8px;
+    color: var(--text-primary);
+    min-height: 48px;
+    outline: none;
+    padding: 0 12px;
+    width: 100%;
+}
+
+.quick-wallet-form input:focus {
+    border-color: rgba(124, 199, 255, 0.46);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.quick-wallet-form.is-disabled {
+    opacity: 0.72;
+}
+
 .game-wrapper {
     align-items: start;
     display: grid;
@@ -1412,7 +1507,14 @@ select.bet-input:focus {
     display: grid;
     gap: 12px;
     grid-template-columns: auto minmax(0, 1fr);
+    overflow: visible;
     padding: 14px;
+}
+
+.live-bet-player {
+    display: grid;
+    position: relative;
+    z-index: 4;
 }
 
 .live-bet-avatar,
@@ -1424,6 +1526,50 @@ select.bet-input:focus {
     height: 42px;
     padding: 5px;
     width: 42px;
+}
+
+.live-bet-hover-card {
+    background: rgba(6, 18, 31, 0.97);
+    border: 1px solid rgba(124, 199, 255, 0.28);
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgba(2, 8, 23, 0.52);
+    display: grid;
+    gap: 4px;
+    left: 0;
+    min-width: 154px;
+    opacity: 0;
+    padding: 9px 10px;
+    pointer-events: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    transform: translateY(-4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+    z-index: 20;
+}
+
+.live-bet-hover-card strong {
+    font-family: 'Sora', sans-serif;
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.live-bet-hover-card span {
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 800;
+}
+
+.live-bet-hover-card span:first-of-type {
+    color: var(--accent-success);
+}
+
+.live-bet-player:hover .live-bet-hover-card,
+.live-bet-player:focus-within .live-bet-hover-card,
+.live-bet:hover .live-bet-hover-card {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .live-bet-content {
@@ -1740,6 +1886,11 @@ select.bet-input:focus {
 .wallet-transfer-card {
     position: relative;
     overflow: hidden;
+}
+
+.live-bet {
+    position: relative;
+    overflow: visible;
 }
 
 .game-stage,
@@ -2954,7 +3105,9 @@ select.bet-input:focus {
 
     .wallet-transfer-overview,
     .wallet-transfer-grid,
-    .wallet-transfer-card {
+    .wallet-transfer-card,
+    .quick-wallet-panel,
+    .quick-wallet-actions {
         grid-template-columns: 1fr;
     }
 }
@@ -2980,6 +3133,11 @@ select.bet-input:focus {
     }
 
     .wallet-transfer-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-wallet-balances,
+    .quick-wallet-form {
         grid-template-columns: 1fr;
     }
 

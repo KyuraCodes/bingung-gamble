@@ -663,27 +663,54 @@ function getNormalizedGlobalStats(stats = {}) {
     };
 }
 
-function updateOnlinePlayerSkins(usernames = []) {
+function updateOnlinePlayerSkins(players = []) {
     const container = document.getElementById('onlinePlayerSkins');
     if (!container) return;
 
-    const names = [...new Set((Array.isArray(usernames) ? usernames : [])
-        .map((name) => String(name || '').trim())
-        .filter(Boolean))]
+    const normalizedPlayers = (Array.isArray(players) ? players : [])
+        .map((player) => {
+            if (typeof player === 'string') {
+                return { username: player, walletBalance: null };
+            }
+
+            return {
+                username: String(player?.username || '').trim(),
+                walletBalance: Number.isFinite(Number(player?.walletBalance)) ? Number(player.walletBalance) : null
+            };
+        })
+        .filter((player) => player.username);
+
+    const uniquePlayers = [];
+    const seenPlayers = new Set();
+    normalizedPlayers.forEach((player) => {
+        const key = player.username.toLowerCase();
+        if (seenPlayers.has(key)) {
+            return;
+        }
+
+        seenPlayers.add(key);
+        uniquePlayers.push(player);
+    });
+
+    const shownPlayers = uniquePlayers
         .slice(0, 10);
 
-    if (names.length === 0) {
+    if (shownPlayers.length === 0) {
         container.innerHTML = '<span class="story-avatar-empty">No live website players yet</span>';
         return;
     }
 
     container.innerHTML = '';
-    names.forEach((username) => {
+    shownPlayers.forEach((player) => {
+        const username = player.username;
+        const walletText = player.walletBalance === null
+            ? 'Wallet loading'
+            : `Wallet: $${formatAmount(player.walletBalance)}`;
         const button = document.createElement('button');
         button.className = 'story-avatar-button';
         button.type = 'button';
-        button.title = username;
-        button.setAttribute('aria-label', `${username} is online`);
+        button.title = `${username} - ${walletText}`;
+        button.setAttribute('aria-label', `${username} is online. ${walletText}`);
 
         const image = document.createElement('img');
         image.src = createChatAvatarUrl(username);
@@ -693,7 +720,11 @@ function updateOnlinePlayerSkins(usernames = []) {
         image.loading = 'lazy';
 
         const label = document.createElement('span');
-        label.textContent = username;
+        const nameLine = document.createElement('strong');
+        nameLine.textContent = username;
+        const walletLine = document.createElement('small');
+        walletLine.textContent = walletText;
+        label.append(nameLine, walletLine);
 
         button.append(image, label);
         container.appendChild(button);
@@ -706,6 +737,11 @@ function updateOnlinePresenceDisplay(presence = {}) {
         ? Number(presence || 0)
         : Number(presence.onlinePlayers || 0);
     const usernames = typeof presence === 'number' ? [] : presence.usernames || [];
+    const players = typeof presence === 'number'
+        ? usernames
+        : (Array.isArray(presence.players) && presence.players.length > 0
+            ? presence.players
+            : usernames);
     const onlineLabel = `${onlineCount}`;
     const onlineSummary = `${onlineCount} online now`;
 
@@ -726,14 +762,15 @@ function updateOnlinePresenceDisplay(presence = {}) {
         chatPresence.textContent = onlineSummary;
     }
 
-    updateOnlinePlayerSkins(usernames);
+    updateOnlinePlayerSkins(players);
 }
 
 function updateGlobalStatsDisplay(stats = {}) {
     globalRealtimeStats = getNormalizedGlobalStats(stats);
     updateOnlinePresenceDisplay({
         onlinePlayers: globalRealtimeStats.onlinePlayers,
-        usernames: stats.usernames || []
+        usernames: stats.usernames || [],
+        players: stats.players || []
     });
 
     const liveFeedStatus = document.getElementById('liveFeedStatus');
@@ -1850,6 +1887,45 @@ function loadProfileGame(container) {
     updatePlayerInfo();
 }
 
+function renderQuickWalletPanel(container, game) {
+    if (!currentPlayer || game === 'profile') {
+        return;
+    }
+
+    const panel = document.createElement('section');
+    panel.className = 'quick-wallet-panel';
+    panel.innerHTML = `
+        <div class="quick-wallet-balances">
+            <div>
+                <span>Website Wallet</span>
+                <strong id="walletTransferBalance">$${formatAmount(currentPlayer.balance)}</strong>
+            </div>
+            <div>
+                <span>Minecraft Balance</span>
+                <strong id="vaultTransferBalance">$${formatAmount(currentPlayer.vaultBalance)}</strong>
+            </div>
+        </div>
+        <div class="quick-wallet-actions">
+            <form id="walletDepositForm" class="quick-wallet-form">
+                <label>
+                    <span>Deposit</span>
+                    <input id="walletDepositAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                </label>
+                <button class="btn-primary wallet-transfer-btn" type="submit">Deposit</button>
+            </form>
+            <form id="walletWithdrawForm" class="quick-wallet-form">
+                <label>
+                    <span>Withdraw</span>
+                    <input id="walletWithdrawAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                </label>
+                <button class="btn-secondary wallet-transfer-btn" type="submit">Withdraw</button>
+            </form>
+        </div>
+    `;
+
+    container.prepend(panel);
+}
+
 function setActiveGame(game) {
     currentGame = game;
     updateGameChrome(game);
@@ -1888,6 +1964,7 @@ function loadGame(game) {
 
     if (typeof loader === 'function') {
         loader(gameContent);
+        renderQuickWalletPanel(gameContent, game);
         enhanceGameUi(gameContent);
         return;
     }
@@ -1902,6 +1979,7 @@ function loadGame(game) {
             </button>
         </div>
     `;
+    renderQuickWalletPanel(gameContent, game);
     enhanceGameUi(gameContent);
 }
 
@@ -2063,6 +2141,18 @@ function addLiveBet(bet, animate = true) {
     const multiplierLabel = Number.isFinite(Number(bet.multiplier)) && Number(bet.multiplier) > 0
         ? `${Number(bet.multiplier).toFixed(2)}x`
         : '0.00x';
+    const walletBalance = Number.isFinite(Number(bet.walletBalance))
+        ? Number(bet.walletBalance)
+        : (Number.isFinite(Number(bet.newBalance)) ? Number(bet.newBalance) : null);
+    const level = Number.isFinite(Number(bet.level)) ? Number(bet.level) : null;
+    const walletLabel = walletBalance === null ? 'Wallet loading' : `$${formatAmount(walletBalance)}`;
+    const levelLabel = level === null ? 'Level loading' : `Level ${level}`;
+    const hoverLabel = `${bet.username} - ${walletLabel} - ${levelLabel}`;
+
+    const playerWrap = document.createElement('div');
+    playerWrap.className = 'live-bet-player';
+    playerWrap.title = hoverLabel;
+
     const avatar = document.createElement('img');
     avatar.className = 'live-bet-avatar';
     avatar.alt = `${bet.username} skin`;
@@ -2071,12 +2161,21 @@ function addLiveBet(bet, animate = true) {
     avatar.src = createChatAvatarUrl(bet.username);
     bindImageFallback(avatar);
 
+    const hoverCard = document.createElement('div');
+    hoverCard.className = 'live-bet-hover-card';
+    hoverCard.innerHTML = `
+        <strong>${bet.username}</strong>
+        <span>Wallet ${walletLabel}</span>
+        <span>${levelLabel}</span>
+    `;
+    playerWrap.append(avatar, hoverCard);
+
     const content = document.createElement('div');
     content.className = 'live-bet-content';
     content.innerHTML = `
         <div class="live-bet-top">
             <div>
-                <span class="live-bet-user">${bet.username}</span>
+                <span class="live-bet-user" title="${hoverLabel}">${bet.username}</span>
                 <span class="live-bet-type">${meta.title}</span>
             </div>
             <span class="live-bet-time">${formatTimeLabel(bet.timestamp)}</span>
@@ -2090,7 +2189,7 @@ function addLiveBet(bet, animate = true) {
         </div>
     `;
 
-    betItem.append(avatar, content);
+    betItem.append(playerWrap, content);
 
     container.insertBefore(betItem, container.firstChild);
 

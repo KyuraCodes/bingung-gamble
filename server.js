@@ -24,8 +24,11 @@ const MAX_CHAT_HISTORY = 40;
 const MINECRAFT_BRIDGE_SECRET = process.env.MINECRAFT_BRIDGE_SECRET || 'bingung-local-bridge-secret';
 const WEBSITE_CHAT_RATE_LIMIT_MS = 900;
 const WEBSITE_TIP_RATE_LIMIT_MS = 1500;
+const MINECRAFT_ANNOUNCEMENT_MIN_AMOUNT = Number(process.env.MINECRAFT_ANNOUNCEMENT_MIN_AMOUNT || 0);
+const MAX_MINECRAFT_ANNOUNCEMENTS = 80;
 
 const chatMessages = [];
+const minecraftAnnouncements = [];
 let globalBetStats = {
     totalBets: 0,
     totalWins: 0,
@@ -35,8 +38,8 @@ let globalBetStats = {
 };
 const connectedWebsiteUsers = new Map();
 const websiteUserSockets = new Map();
-const minecraftOnlineUsers = new Set();
-let minecraftPresenceSyncedAt = 0;
+const websiteUserWallets = new Map();
+let nextMinecraftAnnouncementId = 1;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -113,10 +116,17 @@ function unregisterWebsiteSocket(socketId) {
 
     if (socketIds.size === 0) {
         websiteUserSockets.delete(username);
+        websiteUserWallets.delete(username);
     }
 }
 
 function emitToWebsiteUser(username, event, payload) {
+    if (event === 'wallet:updated' && payload && Number.isFinite(Number(payload.walletBalance))) {
+        websiteUserWallets.set(username, Number(payload.walletBalance));
+        broadcastPresence();
+        emitGlobalStats();
+    }
+
     const socketIds = websiteUserSockets.get(username);
     if (!socketIds || socketIds.size === 0) {
         return;
@@ -129,16 +139,17 @@ function emitToWebsiteUser(username, event, payload) {
 
 function getPresencePayload() {
     const websiteUsernames = [...new Set(connectedWebsiteUsers.values())];
-    const minecraftUsernames = [...minecraftOnlineUsers];
-    const usingMinecraftPresence = minecraftPresenceSyncedAt > 0;
-    const usernames = usingMinecraftPresence ? minecraftUsernames : websiteUsernames;
+    const players = websiteUsernames.slice(0, 12).map((username) => ({
+        username,
+        walletBalance: websiteUserWallets.has(username) ? websiteUserWallets.get(username) : null
+    }));
 
     return {
-        onlinePlayers: usernames.length,
-        usernames: usernames.slice(0, 12),
-        websiteOnlinePlayers: websiteUsernames.length,
-        source: usingMinecraftPresence ? 'minecraft' : 'website',
-        syncedAt: usingMinecraftPresence ? minecraftPresenceSyncedAt : Date.now()
+        onlinePlayers: websiteUsernames.length,
+        usernames: websiteUsernames.slice(0, 12),
+        players,
+        source: 'website',
+        syncedAt: Date.now()
     };
 }
 
@@ -165,6 +176,54 @@ function pushChatMessage(entry) {
     }
 }
 
+function pushMinecraftAnnouncement(betData = {}) {
+    const profit = Number(betData.profit || 0);
+    const loss = Math.max(0, -profit);
+    const isWin = profit > 0;
+    const triggerAmount = isWin ? profit : loss;
+
+    if (!Number.isFinite(triggerAmount) || triggerAmount < MINECRAFT_ANNOUNCEMENT_MIN_AMOUNT) {
+        return;
+    }
+
+    minecraftAnnouncements.push({
+        id: nextMinecraftAnnouncementId++,
+        type: isWin ? 'win' : 'loss',
+        username: sanitizeUsername(betData.username, 'Player'),
+        gameType: String(betData.gameType || 'casino').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'casino',
+        amount: toMoney(betData.amount),
+        payout: toMoney(betData.payout),
+        profit: toMoney(profit),
+        multiplier: Number.isFinite(Number(betData.multiplier)) ? Number(betData.multiplier) : 0,
+        timestamp: Date.now()
+    });
+
+    while (minecraftAnnouncements.length > MAX_MINECRAFT_ANNOUNCEMENTS) {
+        minecraftAnnouncements.shift();
+    }
+}
+
+async function refreshWebsiteWallet(username) {
+    if (!username) {
+        return;
+    }
+
+    try {
+        const [rows] = await db.query(
+            'SELECT wallet_balance FROM players WHERE username = ? LIMIT 1',
+            [username]
+        );
+
+        if (rows.length > 0) {
+            websiteUserWallets.set(username, Number(rows[0].wallet_balance || 0));
+            broadcastPresence();
+            emitGlobalStats();
+        }
+    } catch (error) {
+        console.error('Failed to refresh website wallet presence:', error);
+    }
+}
+
 function requireMinecraftBridgeAuth(req, res, next) {
     const secret = String(req.get('x-minecraft-bridge-secret') || req.body?.secret || '');
 
@@ -176,22 +235,24 @@ function requireMinecraftBridgeAuth(req, res, next) {
 }
 
 app.post('/api/realtime/minecraft/presence', requireMinecraftBridgeAuth, (req, res) => {
-    const usernames = Array.isArray(req.body?.usernames) ? req.body.usernames : [];
-    minecraftOnlineUsers.clear();
-    usernames
-        .map((username) => sanitizeUsername(username, ''))
-        .filter(Boolean)
-        .slice(0, 80)
-        .forEach((username) => minecraftOnlineUsers.add(username));
-    minecraftPresenceSyncedAt = Date.now();
+    res.json({
+        success: true,
+        presence: getPresencePayload()
+    });
+});
 
-    const presence = getPresencePayload();
-    broadcastPresence();
-    emitGlobalStats();
+app.get('/api/realtime/minecraft/announcements', requireMinecraftBridgeAuth, (req, res) => {
+    const after = Number(req.query.after || 0);
+    const announcements = minecraftAnnouncements
+        .filter((announcement) => announcement.id > after)
+        .slice(0, 20);
 
     res.json({
         success: true,
-        presence
+        announcements,
+        latestId: minecraftAnnouncements.length > 0
+            ? minecraftAnnouncements[minecraftAnnouncements.length - 1].id
+            : after
     });
 });
 
@@ -232,6 +293,7 @@ io.on('connection', (socket) => {
 
     if (sessionUsername) {
         registerWebsiteSocket(socket.id, sessionUsername);
+        refreshWebsiteWallet(sessionUsername);
     }
 
     socket.emit('casino:snapshot', {
@@ -425,8 +487,13 @@ global.broadcastBet = (betData) => {
     globalBetStats.totalWagered += Number(betData.amount || 0);
     globalBetStats.netProfit += Number(betData.profit || 0);
 
+    if (betData.username && Number.isFinite(Number(betData.newBalance))) {
+        websiteUserWallets.set(betData.username, Number(betData.newBalance));
+    }
+
     io.emit('newBet', betData);
     emitGlobalStats();
+    pushMinecraftAnnouncement(betData);
 };
 
 async function ensureSchema() {

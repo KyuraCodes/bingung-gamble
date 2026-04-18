@@ -503,6 +503,9 @@ function broadcastBet(payload) {
         multiplier: payload.multiplier,
         won: payload.won,
         profit: payload.profit,
+        newBalance: payload.newBalance,
+        walletBalance: payload.newBalance,
+        level: payload.level,
         timestamp: Date.now()
     });
 }
@@ -663,7 +666,9 @@ async function resolveJackpotRound() {
                     payout,
                     profit,
                     won,
-                    newBalance: nextWallet
+                    newBalance: nextWallet,
+                    walletBalance: nextWallet,
+                    level: computedLevel
                 }
             });
         }
@@ -1807,10 +1812,12 @@ router.get('/recent-bets', async (req, res) => {
 
         try {
             [bets] = await db.query(
-                `SELECT username, game_type, bet_amount, multiplier, won, profit, created_at
-                 FROM bets
-                 ${whereClause}
-                 ORDER BY created_at DESC
+                `SELECT b.username, b.game_type, b.bet_amount, b.multiplier, b.won, b.profit, b.created_at,
+                        p.wallet_balance, p.level
+                 FROM bets b
+                 LEFT JOIN players p ON p.username = b.username
+                 ${expanded ? 'WHERE b.created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)' : ''}
+                 ORDER BY b.created_at DESC
                  LIMIT ?`,
                 [limit]
             );
@@ -1820,10 +1827,12 @@ router.get('/recent-bets', async (req, res) => {
             }
 
             [bets] = await db.query(
-                `SELECT username, bet_amount, multiplier, won, profit, created_at
-                 FROM bets
-                 ${whereClause}
-                 ORDER BY created_at DESC
+                `SELECT b.username, b.bet_amount, b.multiplier, b.won, b.profit, b.created_at,
+                        p.wallet_balance, p.level
+                 FROM bets b
+                 LEFT JOIN players p ON p.username = b.username
+                 ${expanded ? 'WHERE b.created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)' : ''}
+                 ORDER BY b.created_at DESC
                  LIMIT ?`,
                 [limit]
             );
@@ -1839,6 +1848,8 @@ router.get('/recent-bets', async (req, res) => {
                 multiplier: Number(bet.multiplier),
                 won: !!bet.won,
                 profit: Number(bet.profit),
+                walletBalance: Number(bet.wallet_balance || 0),
+                level: Number(bet.level || 1),
                 timestamp: bet.created_at
             }))
         });
