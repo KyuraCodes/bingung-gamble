@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BingungSMP Gamble</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="ambient-shell" aria-hidden="true"></div>
+
+    <div id="app">
+        <section id="loginScreen" class="screen active">
+            <div class="login-shell">
+                <div class="login-story">
+                    <div class="story-kicker">BingungSMP Gamble</div>
+                    <h1 class="story-title">One sharper lobby. Every table wired in.</h1>
+                    <p class="story-copy">
+                        Login with your in-game code, jump into any mode, and keep your balance, level,
+                        and live feed moving in one place.
+                    </p>
+
+                    <div class="story-stat-row">
+                        <div class="story-stat">
+                            <span class="story-stat-label">Supported Modes</span>
+                            <strong id="supportCount">14 Modes</strong>
+                        </div>
+                        <div class="story-stat">
+                            <span class="story-stat-label">Login Flow</span>
+                            <strong>/gamble to connect</strong>
+                        </div>
+                        <div class="story-stat">
+                            <span class="story-stat-label">Players Online</span>
+                            <strong id="loginOnlinePlayers">0 Online</strong>
+                        </div>
+                    </div>
+
+                    <div class="story-avatars">
+                        <img src="https://mc-heads.net/avatar/Technoblade/96" alt="Minecraft avatar" data-avatar-name="Technoblade" data-avatar-size="96" loading="lazy">
+                        <img src="https://mc-heads.net/avatar/Dream/96" alt="Minecraft avatar" data-avatar-name="Dream" data-avatar-size="96" loading="lazy">
+                        <img src="https://mc-heads.net/avatar/Notch/96" alt="Minecraft avatar" data-avatar-name="Notch" data-avatar-size="96" loading="lazy">
+                    </div>
+
+                    <div class="story-mode-strip" id="loginModeStrip"></div>
+                </div>
+
+                <div class="login-card">
+                    <div class="brand-lockup">
+                        <div class="brand-mark">BG</div>
+                        <div>
+                            <p class="brand-eyebrow">BingungSMP Gamble</p>
+                            <p class="brand-subtitle">Casino portal for your server economy</p>
+                        </div>
+                    </div>
+
+                    <div class="login-headline">
+                        <h2>Connect your bankroll</h2>
+                        <p>Use the 6-digit code from Minecraft or launch beta mode for a full practice pass.</p>
+                    </div>
+
+                    <form id="loginForm" class="login-form">
+                        <label class="field">
+                            <span class="field-label">Minecraft Username</span>
+                            <span class="field-input">
+                                <i class="fas fa-user"></i>
+                                <input type="text" id="username" placeholder="Player name" required>
+                            </span>
+                        </label>
+
+                        <label class="field">
+                            <span class="field-label">Access Code</span>
+                            <span class="field-input">
+                                <i class="fas fa-key"></i>
+                                <input type="text" id="code" placeholder="6-digit code" maxlength="6" required>
+                            </span>
+                        </label>
+
+                        <button type="submit" class="btn-login">
+                            <span>Enter Lobby</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+
+                    <div class="login-separator"><span>or</span></div>
+
+                    <button id="betaModeBtn" class="btn-beta" type="button">
+                        <i class="fas fa-flask"></i>
+                        <span>Open beta mode</span>
+                        <strong>99M free</strong>
+                    </button>
+
+                    <div class="login-tips">
+                        <div class="login-tip">
+                            <i class="fas fa-bolt"></i>
+                            <span>Recent bets and chat update in real time while you play.</span>
+                        </div>
+                        <div class="login-tip">
+                            <i class="fas fa-shield-halved"></i>
+                            <span>Your session stays active for 72 hours.</span>
+                        </div>
+                    </div>
+
+                    <div id="loginError" class="error-msg" aria-live="polite"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="mainScreen" class="screen">
+            <div class="app-shell">
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <div class="sidebar-brand">
+                            <div class="brand-mark brand-mark-small">BG</div>
+                            <div>
+                                <span class="sidebar-title">Bingung</span>
+                                <span class="sidebar-subtitle">BingungSMP Gamble</span>
+                            </div>
+                        </div>
+
+                        <div class="sidebar-balance">
+                            <span class="sidebar-balance-label">Website Wallet</span>
+                            <strong id="sidebarBalance">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <nav class="sidebar-nav">
+                        <div class="nav-section">
+                            <span class="nav-label">Casino Modes</span>
+                            <a href="#" class="nav-item active" data-game="crash"><i class="fas fa-rocket"></i><span>Crash</span></a>
+                            <a href="#" class="nav-item" data-game="mines"><i class="fas fa-gem"></i><span>Mines</span></a>
+                            <a href="#" class="nav-item" data-game="towers"><i class="fas fa-tower-observation"></i><span>Towers</span></a>
+                            <a href="#" class="nav-item" data-game="plinko"><i class="fas fa-circle-nodes"></i><span>Plinko</span></a>
+                            <a href="#" class="nav-item" data-game="dice"><i class="fas fa-dice"></i><span>Dice</span></a>
+                            <a href="#" class="nav-item" data-game="roulette"><i class="fas fa-bullseye"></i><span>Roulette</span></a>
+                            <a href="#" class="nav-item" data-game="blackjack"><i class="fas fa-crown"></i><span>Blackjack</span></a>
+                            <a href="#" class="nav-item" data-game="coinflip"><i class="fas fa-coins"></i><span>Coinflip</span></a>
+                            <a href="#" class="nav-item" data-game="wheel"><i class="fas fa-compact-disc"></i><span>Wheel</span></a>
+                            <a href="#" class="nav-item" data-game="limbo"><i class="fas fa-wave-square"></i><span>Limbo</span></a>
+                            <a href="#" class="nav-item" data-game="keno"><i class="fas fa-table-cells-large"></i><span>Keno</span></a>
+                        </div>
+
+                        <div class="nav-section">
+                            <span class="nav-label">Prize Pool</span>
+                            <a href="#" class="nav-item" data-game="cases"><i class="fas fa-box-open"></i><span>Cases</span></a>
+                            <a href="#" class="nav-item" data-game="dailyrewards"><i class="fas fa-calendar-check"></i><span>Daily Rewards</span></a>
+                            <a href="#" class="nav-item" data-game="casebattles"><i class="fas fa-people-group"></i><span>Case Battles</span></a>
+                        </div>
+
+                        <div class="nav-section">
+                            <span class="nav-label">Account</span>
+                            <a href="#" class="nav-item" data-game="profile"><i class="fas fa-id-card"></i><span>Profile</span></a>
+                        </div>
+                    </nav>
+                </aside>
+
+                <main class="main-content">
+                    <header class="topbar">
+                        <div class="topbar-copy">
+                            <span class="topbar-eyebrow" id="gameEyebrow">Burst Room</span>
+                            <div class="topbar-title-row">
+                                <h2 id="gameTitle">Crash</h2>
+                                <span class="mode-chip" id="gameModeChip">High Tempo</span>
+                            </div>
+                            <p id="gameDescription">Ride the multiplier, bank in time, and keep the streak alive.</p>
+                        </div>
+
+                        <div class="topbar-actions">
+                            <div class="network-pill">
+                                <span class="network-pill-label">Players Online</span>
+                                <strong id="topbarOnlinePlayers">0</strong>
+                            </div>
+
+                            <div class="user-balance">
+                                <span class="balance-label">Wallet</span>
+                                <strong id="userBalance">$0.00</strong>
+                            </div>
+
+                            <div class="user-profile">
+                                <img id="userSkin" src="https://mc-heads.net/avatar/Steve/48" alt="Player skin" class="user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
+                                <div class="user-info">
+                                    <span id="userName" class="user-name">Player</span>
+                                    <span id="userLevel" class="user-level">Level 1</span>
+                                </div>
+                            </div>
+
+                            <button id="logoutBtn" class="btn-logout" type="button" aria-label="Logout">
+                                <i class="fas fa-right-from-bracket"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="game-wrapper">
+                        <section class="game-stage">
+                            <div class="stage-header">
+                                <div>
+                                    <span class="stage-label" id="stageLabel">Featured Table</span>
+                                    <strong class="stage-focus" id="stageFocus">Crash Arena</strong>
+                                </div>
+                                <div class="game-quick-switch" id="gameQuickSwitch"></div>
+                            </div>
+                            <div id="provablyFairPanel" class="provably-fair-panel"></div>
+
+                            <div class="game-area">
+                                <div id="gameContent"></div>
+                            </div>
+                        </section>
+
+                        <aside class="live-sidebar">
+                            <div class="live-header">
+                                <div>
+                                    <span class="live-label">Realtime Feed</span>
+                                    <strong>Global action</strong>
+                                </div>
+                                <span class="live-status" id="liveFeedStatus">synced</span>
+                            </div>
+                            <div class="realtime-summary">
+                                <div class="summary-tile">
+                                    <span class="summary-label">Players</span>
+                                    <strong id="summaryOnlinePlayers">0</strong>
+                                </div>
+                                <div class="summary-tile">
+                                    <span class="summary-label">Global Wins</span>
+                                    <strong id="summaryGlobalWins">0</strong>
+                                </div>
+                                <div class="summary-tile">
+                                    <span class="summary-label">Global Losses</span>
+                                    <strong id="summaryGlobalLosses">0</strong>
+                                </div>
+                                <div class="summary-tile">
+                                    <span class="summary-label">Volume</span>
+                                    <strong id="summaryGlobalVolume">$0.00</strong>
+                                </div>
+                            </div>
+
+                            <div class="feed-block">
+                                <div class="feed-block-header">
+                                    <strong>Recent Bets</strong>
+                                    <button id="recentBetsToggle" class="feed-action-btn" type="button">More</button>
+                                </div>
+                                <div id="liveBets" class="live-bets"></div>
+                            </div>
+
+                            <section class="chat-panel">
+                                <div class="feed-block-header">
+                                    <strong>Live Chat</strong>
+                                    <span id="chatPresenceSummary">0 online now</span>
+                                </div>
+                                <div id="liveChatMessages" class="live-chat-messages"></div>
+                                <form id="liveChatForm" class="live-chat-form">
+                                    <img id="chatUserAvatar" src="https://mc-heads.net/avatar/Steve/48" alt="Chat avatar" class="chat-user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
+                                    <input id="liveChatInput" type="text" class="chat-input" maxlength="220" placeholder="Talk to players on the website">
+                                    <button class="btn-primary chat-send-btn" type="submit">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </form>
+                            </section>
+                        </aside>
+                    </div>
+                </main>
+            </div>
+        </section>
+    </div>
+
+    <div id="notificationStack" class="notification-stack" aria-live="polite"></div>
+
+    <div id="chatTipModal" class="tip-modal" aria-hidden="true">
+        <div class="tip-modal-card">
+            <button id="chatTipClose" class="modal-close" type="button" aria-label="Close tip modal">&times;</button>
+            <span class="tip-modal-kicker">Website Tip</span>
+            <h3 id="chatTipTitle">Tip Player</h3>
+            <p>Send money from your website wallet. Minecraft balance is not touched.</p>
+            <label class="wallet-transfer-input">
+                <span>Amount</span>
+                <input id="chatTipAmount" type="text" placeholder="10k" data-amount-input="true" autocomplete="off">
+            </label>
+            <button id="chatTipSend" class="btn-primary" type="button">Send Tip</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+    <script src="games.js"></script>
+    <script src="cases.js"></script>
+</body>
+</html>
