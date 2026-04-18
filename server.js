@@ -26,6 +26,7 @@ const WEBSITE_CHAT_RATE_LIMIT_MS = 900;
 const WEBSITE_TIP_RATE_LIMIT_MS = 1500;
 const MINECRAFT_ANNOUNCEMENT_MIN_AMOUNT = Number(process.env.MINECRAFT_ANNOUNCEMENT_MIN_AMOUNT || 0);
 const MAX_MINECRAFT_ANNOUNCEMENTS = 80;
+const SESSION_TTL_MS = 72 * 60 * 60 * 1000;
 
 const chatMessages = [];
 const minecraftAnnouncements = [];
@@ -41,16 +42,105 @@ const websiteUserSockets = new Map();
 const websiteUserWallets = new Map();
 let nextMinecraftAnnouncementId = 1;
 
+class MySqlSessionStore extends session.Store {
+    constructor(options = {}) {
+        super();
+        this.tableName = options.tableName || 'sessions';
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupExpired().catch((error) => {
+                console.error('Session cleanup failed:', error);
+            });
+        }, 60 * 60 * 1000);
+        if (typeof this.cleanupTimer.unref === 'function') {
+            this.cleanupTimer.unref();
+        }
+    }
+
+    get(sid, callback) {
+        db.query(
+            `SELECT session_data, expires_at
+             FROM ${this.tableName}
+             WHERE session_token = ?
+             LIMIT 1`,
+            [sid]
+        )
+            .then(([rows]) => {
+                if (rows.length === 0) {
+                    callback(null, null);
+                    return;
+                }
+
+                const row = rows[0];
+                const expiresAt = new Date(row.expires_at).getTime();
+                if (!row.session_data || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+                    this.destroy(sid, () => callback(null, null));
+                    return;
+                }
+
+                callback(null, JSON.parse(row.session_data));
+            })
+            .catch((error) => callback(error));
+    }
+
+    set(sid, sessionData, callback = () => {}) {
+        const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+        const username = sessionData?.username ? sanitizeUsername(sessionData.username, '') : null;
+        const payload = JSON.stringify(sessionData || {});
+
+        db.query(
+            `INSERT INTO ${this.tableName} (session_token, username, session_data, expires_at)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                 username = VALUES(username),
+                 session_data = VALUES(session_data),
+                 expires_at = VALUES(expires_at)`,
+            [sid, username, payload, expiresAt]
+        )
+            .then(() => callback(null))
+            .catch((error) => callback(error));
+    }
+
+    destroy(sid, callback = () => {}) {
+        db.query(`DELETE FROM ${this.tableName} WHERE session_token = ?`, [sid])
+            .then(() => callback(null))
+            .catch((error) => callback(error));
+    }
+
+    touch(sid, sessionData, callback = () => {}) {
+        const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+        const username = sessionData?.username ? sanitizeUsername(sessionData.username, '') : null;
+        db.query(
+            `UPDATE ${this.tableName}
+             SET expires_at = ?, username = COALESCE(?, username)
+             WHERE session_token = ?`,
+            [expiresAt, username, sid]
+        )
+            .then(() => callback(null))
+            .catch((error) => callback(error));
+    }
+
+    async cleanupExpired() {
+        await db.query(`DELETE FROM ${this.tableName} WHERE expires_at <= NOW()`);
+    }
+}
+
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+const sessionStore = new MySqlSessionStore();
 const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'bingung-secret-key',
     resave: false,
     saveUninitialized: false,
+    rolling: true,
+    unset: 'destroy',
+    store: sessionStore,
     cookie: {
-        maxAge: 72 * 60 * 60 * 1000,
-        httpOnly: true
+        maxAge: SESSION_TTL_MS,
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
     }
 });
 app.use(sessionMiddleware);
@@ -534,12 +624,29 @@ async function ensureSchema() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(16) NOT NULL,
                 session_token VARCHAR(255) NOT NULL UNIQUE,
+                session_data LONGTEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL,
                 INDEX idx_session_token (session_token),
                 INDEX idx_username (username)
             )`
         );
+
+        try {
+            await db.query('ALTER TABLE sessions MODIFY username VARCHAR(16) NULL');
+        } catch (error) {
+            if (error.code !== 'ER_BAD_NULL_ERROR') {
+                throw error;
+            }
+        }
+
+        try {
+            await db.query('ALTER TABLE sessions ADD COLUMN session_data LONGTEXT NULL');
+        } catch (error) {
+            if (error.code !== 'ER_DUP_FIELDNAME') {
+                throw error;
+            }
+        }
 
         await db.query(
             `CREATE TABLE IF NOT EXISTS bets (

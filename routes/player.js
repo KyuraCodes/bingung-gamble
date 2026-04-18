@@ -35,7 +35,10 @@ function buildPlayerPayload(player = {}, betStats = {}) {
         totalWon: Number(player.total_won || 0),
         totalBets: Number(betStats.total_bets || 0),
         wins: Number(betStats.wins || 0),
-        biggestWin: Number(betStats.biggest_win || 0)
+        biggestWin: Number(betStats.biggest_win || 0),
+        biggestLoss: Math.abs(Number(betStats.biggest_loss || 0)),
+        totalProfit: Number(betStats.total_profit || 0),
+        totalLost: Number(betStats.total_lost || 0)
     };
 }
 
@@ -171,7 +174,10 @@ async function getPlayerWithBetStats(username) {
         `SELECT
             COUNT(*) AS total_bets,
             SUM(CASE WHEN won = TRUE THEN 1 ELSE 0 END) AS wins,
-            MAX(profit) AS biggest_win
+            MAX(profit) AS biggest_win,
+            MIN(profit) AS biggest_loss,
+            SUM(CASE WHEN profit > 0 THEN profit ELSE 0 END) AS total_profit,
+            SUM(CASE WHEN profit < 0 THEN ABS(profit) ELSE 0 END) AS total_lost
          FROM bets
          WHERE username = ?`,
         [username]

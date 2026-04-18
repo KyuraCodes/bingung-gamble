@@ -53,14 +53,27 @@ router.post('/login', async (req, res) => {
 
         const player = players[0];
 
-        // Create session
-        req.session.username = username;
-        req.session.loggedIn = true;
+        req.session.regenerate((sessionError) => {
+            if (sessionError) {
+                console.error('Session regeneration error:', sessionError);
+                return res.status(500).json({ success: false, message: 'Session error' });
+            }
 
-        res.json({
-            success: true,
-            message: 'Login successful',
-            player: buildPlayerPayload(player)
+            req.session.username = username;
+            req.session.loggedIn = true;
+
+            req.session.save((saveError) => {
+                if (saveError) {
+                    console.error('Session save error:', saveError);
+                    return res.status(500).json({ success: false, message: 'Session error' });
+                }
+
+                res.json({
+                    success: true,
+                    message: 'Login successful',
+                    player: buildPlayerPayload(player)
+                });
+            });
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -83,6 +96,9 @@ router.get('/session', async (req, res) => {
         }
 
         const player = players[0];
+        if (typeof req.session.touch === 'function') {
+            req.session.touch();
+        }
         res.json({
             loggedIn: true,
             player: buildPlayerPayload(player)

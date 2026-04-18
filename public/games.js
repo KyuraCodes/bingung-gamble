@@ -103,15 +103,15 @@ let crashAutoCashout = 0;
 let crashUiTicker = null;
 let jackpotState = null;
 let jackpotPoller = null;
-const CRASH_EDGE = 0.86;
-const DICE_EDGE = 0.86;
+const CRASH_EDGE = 0.8;
+const DICE_EDGE = 0.78;
 const COINFLIP_PAYOUT = 1.78;
-const LIMBO_EDGE = 0.84;
+const LIMBO_EDGE = 0.68;
 const GAME_COOLDOWN_MS = 900;
 const LONG_GAME_COOLDOWN_MS = 1400;
 const CRASH_MAX_MULTIPLIER = 80;
 const LIMBO_MAX_TARGET = 25;
-const MINES_EDGE = 0.86;
+const MINES_EDGE = 0.8;
 const TOWERS_STEP_MULTIPLIER = 0.24;
 const BLACKJACK_NATURAL_PAYOUT = 2.2;
 const KENO_PAYOUTS = { 5: 1.15, 6: 1.8, 7: 3.2, 8: 6.4, 9: 12, 10: 24 };
@@ -608,6 +608,14 @@ function startCrashBet() {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Plinko bet')) {
+        return;
+    }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Crash bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -711,7 +719,10 @@ function startCrashBet() {
 }
 
 async function crashCashout() {
-    if (!crashBetActive) return;
+    const activeBetAmount = crashBetActive ? crashBetAmount : Number(crashSharedState?.activeBet?.amount || 0);
+    if (activeBetAmount <= 0) return;
+    crashBetActive = true;
+    crashBetAmount = activeBetAmount;
 
     if (isBetaMode) {
         clearInterval(crashInterval);
@@ -933,6 +944,10 @@ function startMinesGame() {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Mines bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -1087,6 +1102,10 @@ async function rollDice() {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Dice bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -1177,32 +1196,32 @@ async function finishDiceRoll(amount, rollOver) {
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
 const MAX_PLINKO_ROWS = 16;
-const PLINKO_MAX_ACTIVE_DROPS = 10;
+const PLINKO_MAX_ACTIVE_DROPS = 12;
 const PLINKO_RESULT_CLEAR_MS = 1800;
 const PLINKO_RISK_CONFIG = {
     low: {
         label: 'Low Risk',
-        targetEv: 0.86,
-        centerFloor: 0.58,
-        edgeBase: 3.4,
-        edgeGrowth: 0.18,
-        curve: 1.34
+        targetEv: 0.78,
+        centerFloor: 0.46,
+        edgeBase: 2.7,
+        edgeGrowth: 0.14,
+        curve: 1.42
     },
     medium: {
         label: 'Medium Risk',
-        targetEv: 0.83,
-        centerFloor: 0.14,
-        edgeBase: 6.4,
-        edgeGrowth: 0.34,
-        curve: 1.1
+        targetEv: 0.68,
+        centerFloor: 0.1,
+        edgeBase: 4.8,
+        edgeGrowth: 0.26,
+        curve: 1.18
     },
     high: {
         label: 'High Risk',
-        targetEv: 0.8,
-        centerFloor: 0.03,
-        edgeBase: 18,
-        edgeGrowth: 0.34,
-        curve: 0.92
+        targetEv: 0.56,
+        centerFloor: 0.02,
+        edgeBase: 11.8,
+        edgeGrowth: 0.28,
+        curve: 0.98
     }
 };
 
@@ -2067,6 +2086,10 @@ function startTowersGame() {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Towers bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -2430,6 +2453,10 @@ async function spinRoulette(color) {
         return;
     }
 
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Roulette bet')) {
+        return;
+    }
+
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
         return;
@@ -2714,6 +2741,10 @@ function dealBlackjack() {
         return;
     }
 
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Blackjack bet')) {
+        return;
+    }
+
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
         return;
@@ -2814,6 +2845,11 @@ async function blackjackStand() {
 
 async function blackjackDouble() {
     if (!blackjackGameActive || blackjackResolving) {
+        return;
+    }
+
+    if ((blackjackBetAmount * 2) > 5e15) {
+        showNotification('Double would push this hand over the max bet limit.', 'error');
         return;
     }
 
@@ -2946,6 +2982,10 @@ function spinSlots() {
     
     if (!amount || amount <= 0) {
         showNotification('Enter a valid bet amount', 'error');
+        return;
+    }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Slots bet')) {
         return;
     }
     
@@ -3092,6 +3132,10 @@ async function flipCoin(choice) {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Coinflip bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -3203,9 +3247,9 @@ function loadWheelGame(container) {
                     <div class="bet-input-group">
                         <label class="bet-label">Risk Level</label>
                         <select id="wheelRisk" class="bet-input">
-                            <option value="low">Low Risk (Max 2.45x)</option>
-                            <option value="medium">Medium Risk (Max 4.4x)</option>
-                            <option value="high">High Risk (Max 16x)</option>
+                            <option value="low">Low Risk (12 bars, Max 1.4x)</option>
+                            <option value="medium">Medium Risk (14 bars, Max 2.4x)</option>
+                            <option value="high">High Risk (16 bars, Max 7.2x)</option>
                         </select>
                     </div>
                     
@@ -3233,28 +3277,29 @@ let wheelSpinning = false;
 let wheelCurrentRisk = 'low';
 
 const WHEEL_SEGMENT_MAP = {
-    low: [0.72, 0.92, 1.08, 1.42, 2.45, 1.42, 1.08, 0.92],
-    medium: [0.12, 0.45, 0.92, 1.75, 4.4, 1.75, 0.92, 0.45],
-    high: [0.02, 0.12, 0.38, 1.45, 16, 1.45, 0.38, 0.12]
+    low: [0.2, 0.35, 0.45, 0.62, 0.78, 0.92, 1.06, 1.18, 1.4, 1.18, 0.92, 0.62],
+    medium: [0.03, 0.08, 0.12, 0.18, 0.28, 0.42, 0.6, 0.82, 1.1, 1.45, 2.4, 1.45, 0.82, 0.42],
+    high: [0.01, 0.01, 0.02, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1, 0.14, 0.18, 0.26, 0.36, 0.58, 1.4, 7.2]
 };
 
 const WHEEL_RISK_META = {
     low: {
         label: 'Low Risk',
-        copy: 'Smoother spins with a tighter floor and a capped 2.45x peak.',
+        copy: 'Dense lanes, softer recoveries, and one modest 1.4x high lane.',
         palette: ['#67e8f9', '#38bdf8', '#34d399', '#60a5fa']
     },
     medium: {
         label: 'Medium Risk',
-        copy: 'Balanced spread with colder misses and a sharper 4.4x target.',
+        copy: 'Fourteen lanes with colder misses and one narrow 2.4x pocket.',
         palette: ['#38bdf8', '#2563eb', '#22c55e', '#0ea5e9']
     },
     high: {
         label: 'High Risk',
-        copy: 'Brutal spread, tiny recovery lanes, and one explosive 16x spike.',
+        copy: 'Sixteen bars, brutal dead zones, and a single rare 7.2x spike.',
         palette: ['#fb7185', '#f97316', '#38bdf8', '#1d4ed8']
     }
 };
+const WHEEL_POINTER_ANGLE = -Math.PI / 2;
 
 function initWheel() {
     wheelCanvas = document.getElementById('wheelCanvas');
@@ -3350,9 +3395,9 @@ function drawWheel() {
     });
 
     wheelCtx.beginPath();
-    wheelCtx.moveTo(centerX, 20);
-    wheelCtx.lineTo(centerX - 15, 50);
-    wheelCtx.lineTo(centerX + 15, 50);
+    wheelCtx.moveTo(centerX, 54);
+    wheelCtx.lineTo(centerX - 17, 18);
+    wheelCtx.lineTo(centerX + 17, 18);
     wheelCtx.closePath();
     wheelCtx.fillStyle = '#f8fbff';
     wheelCtx.fill();
@@ -3374,24 +3419,28 @@ function normalizeWheelAngle(angle) {
     return ((angle % fullTurn) + fullTurn) % fullTurn;
 }
 
-function getWheelWinningIndex() {
+function getWheelAlignedRotation(targetIndex) {
     const segmentAngle = (Math.PI * 2) / wheelSegments.length;
-    const pointerAngle = normalizeWheelAngle((-Math.PI / 2) - wheelRotation);
+    return normalizeWheelAngle(WHEEL_POINTER_ANGLE - ((targetIndex + 0.5) * segmentAngle));
+}
+
+function getWheelWinningIndex(rotation = wheelRotation) {
+    const segmentAngle = (Math.PI * 2) / wheelSegments.length;
+    const pointerAngle = normalizeWheelAngle(WHEEL_POINTER_ANGLE - normalizeWheelAngle(rotation));
     return Math.floor(pointerAngle / segmentAngle) % wheelSegments.length;
 }
 
 function getWheelTargetRotation(targetIndex) {
     const fullTurn = Math.PI * 2;
-    const segmentAngle = fullTurn / wheelSegments.length;
-    const desired = normalizeWheelAngle((-Math.PI / 2) - ((targetIndex + 0.5) * segmentAngle));
+    const desired = getWheelAlignedRotation(targetIndex);
     const current = normalizeWheelAngle(wheelRotation);
     let delta = desired - current;
 
-    if (delta <= 0) {
+    if (delta < 0) {
         delta += fullTurn;
     }
 
-    delta += fullTurn * (5 + Math.random() * 2.4);
+    delta += fullTurn * (5.5 + Math.random() * 1.8);
     return wheelRotation + delta;
 }
 
@@ -3409,6 +3458,10 @@ async function spinWheel() {
         showNotification('Enter a valid bet amount', 'error');
         return;
     }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Wheel bet')) {
+        return;
+    }
     
     if (amount > currentPlayer.balance) {
         showNotification('Insufficient balance', 'error');
@@ -3423,6 +3476,7 @@ async function spinWheel() {
     spinButton.disabled = true;
     spinButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spinning...';
     riskSelect.disabled = true;
+    playGameSound('spin-start');
 
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
@@ -3471,6 +3525,11 @@ async function spinWheel() {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
+            const finalIndex = isBetaMode ? getWheelWinningIndex(targetRotation) : forcedSegmentIndex;
+            wheelRotation = getWheelAlignedRotation(finalIndex);
+            drawWheel();
+            playGameSound('spin-stop');
+
             const segmentIndex = isBetaMode ? getWheelWinningIndex() : forcedSegmentIndex;
             const multiplier = isBetaMode ? wheelSegments[segmentIndex] : forcedMultiplier;
             const winAmount = isBetaMode ? amount * multiplier : forcedPayout;
@@ -3559,6 +3618,10 @@ async function playLimbo() {
     
     if (!amount || amount <= 0) {
         showNotification('Enter a valid bet amount', 'error');
+        return;
+    }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Limbo bet')) {
         return;
     }
     
@@ -3852,6 +3915,10 @@ async function joinJackpot() {
     const amount = readAmountInput('jackpotBetAmount');
     if (!amount || amount <= 0) {
         showNotification('Enter a valid jackpot bet amount.', 'error');
+        return;
+    }
+
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Jackpot bet')) {
         return;
     }
 

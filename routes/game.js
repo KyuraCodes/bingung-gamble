@@ -14,14 +14,17 @@ const {
     sanitizeClientSeed
 } = require('../config/provablyFair');
 
-const GENERIC_BET_EDGE = 0.86;
-const DICE_EDGE = 0.86;
-const LIMBO_EDGE = 0.84;
-const CRASH_EDGE = 0.86;
+const GENERIC_BET_EDGE = 0.8;
+const DICE_EDGE = 0.78;
+const LIMBO_EDGE = 0.68;
+const CRASH_EDGE = 0.8;
 const LIMBO_MAX_TARGET = 25;
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
 const MAX_PLINKO_ROWS = 16;
+const MIN_GAME_BET = 1e6;
+const MAX_GAME_BET = 5e15;
+const CRASH_INSTANT_BUST_CHANCE = 0.065;
 const CRASH_BETTING_WINDOW_MS = 8000;
 const CRASH_RESULT_WINDOW_MS = 2400;
 const CRASH_TICK_INTERVAL_MS = 120;
@@ -47,14 +50,14 @@ const ROULETTE_SEGMENTS = [
 const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
 const COINFLIP_PAYOUT = 1.78;
 const PLINKO_RISK_CONFIG = {
-    low: { label: 'Low', targetEv: 0.86, centerFloor: 0.58, edgeBase: 3.4, edgeGrowth: 0.18, curve: 1.34 },
-    medium: { label: 'Medium', targetEv: 0.83, centerFloor: 0.14, edgeBase: 6.4, edgeGrowth: 0.34, curve: 1.1 },
-    high: { label: 'High', targetEv: 0.8, centerFloor: 0.03, edgeBase: 18, edgeGrowth: 0.34, curve: 0.92 }
+    low: { label: 'Low', targetEv: 0.78, centerFloor: 0.46, edgeBase: 2.7, edgeGrowth: 0.14, curve: 1.42 },
+    medium: { label: 'Medium', targetEv: 0.68, centerFloor: 0.1, edgeBase: 4.8, edgeGrowth: 0.26, curve: 1.18 },
+    high: { label: 'High', targetEv: 0.56, centerFloor: 0.02, edgeBase: 11.8, edgeGrowth: 0.28, curve: 0.98 }
 };
 const WHEEL_SEGMENT_MAP = {
-    low: [0.72, 0.92, 1.08, 1.42, 2.45, 1.42, 1.08, 0.92],
-    medium: [0.12, 0.45, 0.92, 1.75, 4.4, 1.75, 0.92, 0.45],
-    high: [0.02, 0.12, 0.38, 1.45, 16, 1.45, 0.38, 0.12]
+    low: [0.2, 0.35, 0.45, 0.62, 0.78, 0.92, 1.06, 1.18, 1.4, 1.18, 0.92, 0.62],
+    medium: [0.03, 0.08, 0.12, 0.18, 0.28, 0.42, 0.6, 0.82, 1.1, 1.45, 2.4, 1.45, 0.82, 0.42],
+    high: [0.01, 0.01, 0.02, 0.02, 0.03, 0.04, 0.06, 0.08, 0.1, 0.14, 0.18, 0.26, 0.36, 0.58, 1.4, 7.2]
 };
 const JACKPOT_MAX_PLAYERS = 10;
 const JACKPOT_ROUND_MS = 30000;
@@ -187,6 +190,25 @@ function buildError(status, message) {
     return { status, message };
 }
 
+function formatBetLimit(value) {
+    const amount = Number(value || 0);
+    if (amount >= 1e15) return `${toMoney(amount / 1e15)}Q`;
+    if (amount >= 1e12) return `${toMoney(amount / 1e12)}T`;
+    if (amount >= 1e9) return `${toMoney(amount / 1e9)}B`;
+    if (amount >= 1e6) return `${toMoney(amount / 1e6)}M`;
+    if (amount >= 1e3) return `${toMoney(amount / 1e3)}K`;
+    return `${toMoney(amount)}`;
+}
+
+function validateGameBetAmount(amount) {
+    const safeAmount = toMoney(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount < MIN_GAME_BET || safeAmount > MAX_GAME_BET) {
+        return buildError(400, `Bet amount must stay between $${formatBetLimit(MIN_GAME_BET)} and $${formatBetLimit(MAX_GAME_BET)}`);
+    }
+
+    return null;
+}
+
 function buildSettlementValidation({ amount, payout, gameType }) {
     const safeAmount = toMoney(amount);
     const safePayout = toMoney(Math.max(0, payout));
@@ -194,6 +216,11 @@ function buildSettlementValidation({ amount, payout, gameType }) {
 
     if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
         return buildError(400, 'Invalid bet amount');
+    }
+
+    const boundError = validateGameBetAmount(safeAmount);
+    if (boundError) {
+        return boundError;
     }
 
     if (!Number.isFinite(safePayout) || safePayout < 0) {
@@ -727,7 +754,12 @@ function calculateCrashMultiplier(startedAt) {
 
 function generateCrashPoint() {
     const random = Math.random();
-    const point = CRASH_EDGE / Math.max(0.0001, 1 - random);
+    if (random < CRASH_INSTANT_BUST_CHANCE) {
+        return 1;
+    }
+
+    const adjustedRandom = (random - CRASH_INSTANT_BUST_CHANCE) / (1 - CRASH_INSTANT_BUST_CHANCE);
+    const point = CRASH_EDGE / Math.max(0.0001, 1 - adjustedRandom);
     return toMoney(Math.max(1, Math.min(80, point)));
 }
 
@@ -766,7 +798,11 @@ function emitCrashState() {
         return;
     }
 
-    crashIo.emit('crash:state', getCrashStateSnapshot());
+    crashIo.sockets.sockets.forEach((socket) => {
+        const sessionData = socket.request?.session || {};
+        const username = sessionData.loggedIn ? sanitizeUsernameForMeta(sessionData.username) : null;
+        socket.emit('crash:state', getCrashStateSnapshot(username));
+    });
 }
 
 async function settleCrashBet(bet, { won, multiplier, payout, resultType }) {
@@ -1119,6 +1155,11 @@ router.post('/crash/bet', requireAuth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Invalid bet amount' });
     }
 
+    const amountValidation = validateGameBetAmount(amount);
+    if (amountValidation) {
+        return res.status(amountValidation.status).json({ success: false, message: amountValidation.message });
+    }
+
     if (getCrashUserBet(username)) {
         return res.status(409).json({ success: false, message: 'You already have a crash bet in this round.' });
     }
@@ -1232,6 +1273,11 @@ router.post('/jackpot/join', requireAuth, async (req, res) => {
 
     if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ success: false, message: 'Invalid jackpot bet amount' });
+    }
+
+    const amountValidation = validateGameBetAmount(amount);
+    if (amountValidation) {
+        return res.status(amountValidation.status).json({ success: false, message: amountValidation.message });
     }
 
     if (jackpotRoundState.status !== 'open') {
@@ -1429,6 +1475,11 @@ router.post('/bet', requireAuth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Invalid bet parameters' });
     }
 
+    const amountValidation = validateGameBetAmount(amount);
+    if (amountValidation) {
+        return res.status(amountValidation.status).json({ success: false, message: amountValidation.message });
+    }
+
     let connection;
 
     try {
@@ -1529,6 +1580,11 @@ router.post('/play', requireAuth, async (req, res) => {
 
     if (!Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ success: false, message: 'Invalid bet amount' });
+    }
+
+    const amountValidation = validateGameBetAmount(amount);
+    if (amountValidation) {
+        return res.status(amountValidation.status).json({ success: false, message: amountValidation.message });
     }
 
     let connection;

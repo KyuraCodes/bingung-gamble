@@ -1034,6 +1034,15 @@ select.bet-input:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.quick-wallet-limit-note {
+    border-top: 1px solid rgba(124, 199, 255, 0.12);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 800;
+    grid-column: 1 / -1;
+    padding-top: 4px;
+}
+
 .quick-wallet-form {
     align-items: end;
     display: grid;
@@ -3420,5 +3429,31 @@ select.bet-input:focus {
 @media (max-width: 560px) {
     .jackpot-pot-card strong {
         font-size: 42px;
+    }
+}
+
+@media (max-width: 900px), (prefers-reduced-motion: reduce) {
+    .ambient-shell::before,
+    .ambient-shell::after,
+    .stage-atmosphere,
+    .crash-countdown-banner,
+    .notification.visible,
+    .notification-progress,
+    .daily-crate-core,
+    .daily-crate-orbit::after,
+    .mode-chip::before,
+    .plinko-stage::before {
+        animation: none !important;
+    }
+
+    #mainScreen.active .main-panel,
+    #mainScreen.active .live-sidebar,
+    #gameContent > .game-container {
+        animation: none !important;
+    }
+
+    .story-avatar-button:hover img,
+    .story-avatar-button:focus-visible img {
+        transform: none;
     }
 }

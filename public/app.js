@@ -21,6 +21,8 @@ const AMOUNT_SUFFIXES = {
     t: 1e12,
     q: 1e15
 };
+const GAME_MIN_BET = 1e6;
+const GAME_MAX_BET = 5e15;
 
 const GAME_META = {
     crash: {
@@ -163,7 +165,11 @@ function normalizePlayerState(player = {}) {
         xp: Number(player.xp || 0),
         xpToNextLevel: Math.max(0, Number(player.xpToNextLevel || 0)),
         xpIntoLevel: Math.max(0, Number(player.xpIntoLevel || 0)),
-        levelProgress: Math.max(0, Math.min(1, Number(player.levelProgress || 0)))
+        levelProgress: Math.max(0, Math.min(1, Number(player.levelProgress || 0))),
+        biggestWin: Number(player.biggestWin || 0),
+        biggestLoss: Number(player.biggestLoss || 0),
+        totalProfit: Number(player.totalProfit || 0),
+        totalLost: Number(player.totalLost || 0)
     };
 }
 
@@ -304,6 +310,20 @@ function parseAmountInput(rawValue) {
 function readAmountInput(inputId) {
     const input = document.getElementById(inputId);
     return input ? parseAmountInput(input.value) : NaN;
+}
+
+function getBetLimitMessage() {
+    return `Bet amount must stay between $${formatAmount(GAME_MIN_BET)} and $${formatAmount(GAME_MAX_BET)}.`;
+}
+
+function validateGameBetAmount(amount, label = 'Bet') {
+    const wager = Number(amount || 0);
+    if (!Number.isFinite(wager) || wager < GAME_MIN_BET || wager > GAME_MAX_BET) {
+        showNotification(`${label} must stay between $${formatAmount(GAME_MIN_BET)} and $${formatAmount(GAME_MAX_BET)}.`, 'error');
+        return false;
+    }
+
+    return true;
 }
 
 function setAmountInputValue(inputId, value) {
@@ -1204,17 +1224,21 @@ function refreshLiveChatAvailability() {
     if (!form || !input) return;
 
     const submitButton = form.querySelector("button[type='submit']");
-    const enabled = !!currentPlayer;
+    const loggedIn = !!currentPlayer;
+    const connected = !!socket?.connected;
+    const enabled = loggedIn && connected;
 
     input.disabled = !enabled;
     input.readOnly = !enabled;
     input.placeholder = enabled
         ? 'Talk to players on the website'
-        : 'Login to join website chat';
+        : (loggedIn ? 'Realtime chat is reconnecting...' : 'Login to join website chat');
 
     if (submitButton) {
         submitButton.disabled = !enabled;
-        submitButton.title = enabled ? 'Send chat message' : 'Website chat requires a real login';
+        submitButton.title = enabled
+            ? 'Send chat message'
+            : (loggedIn ? 'Realtime chat is reconnecting' : 'Website chat requires a real login');
     }
 }
 
@@ -1327,6 +1351,29 @@ function resetSocketConnection() {
 
     socket.disconnect();
     socket = null;
+}
+
+async function recoverSocketSession() {
+    resetSocketConnection();
+
+    if (currentPlayer) {
+        try {
+            const response = await fetch('/api/auth/session');
+            const data = await response.json();
+            if (data.loggedIn && data.player) {
+                setCurrentPlayerState(data.player);
+            } else {
+                showNotification('Your website session expired. Login again to keep chatting.', 'error');
+                location.reload();
+                return;
+            }
+        } catch (error) {
+            console.error('Socket session recovery failed:', error);
+        }
+    }
+
+    connectSocket();
+    refreshLiveChatAvailability();
 }
 
 function buildAvatarFallbackDataUri(name = 'BG', size = 96) {
@@ -1825,6 +1872,9 @@ function loadProfileGame(container) {
                     <div class="overview-card"><span class="overview-label">Total Wagered</span><strong id="statWagered">$0.00</strong></div>
                     <div class="overview-card"><span class="overview-label">Winning Bets</span><strong id="statWins">0</strong></div>
                     <div class="overview-card"><span class="overview-label">Biggest Hit</span><strong id="statBiggest">$0.00</strong></div>
+                    <div class="overview-card"><span class="overview-label">Biggest Loss</span><strong id="statBiggestLoss">$0.00</strong></div>
+                    <div class="overview-card"><span class="overview-label">Total Won</span><strong id="statTotalProfit">$0.00</strong></div>
+                    <div class="overview-card"><span class="overview-label">Total Lost</span><strong id="statTotalLost">$0.00</strong></div>
                     <div class="overview-card"><span class="overview-label">Players Online</span><strong id="statOnlinePlayers">${globalRealtimeStats?.onlinePlayers || 0}</strong></div>
                 </div>
             </section>
@@ -1921,6 +1971,7 @@ function renderQuickWalletPanel(container, game) {
                 <button class="btn-secondary wallet-transfer-btn" type="submit">Withdraw</button>
             </form>
         </div>
+        <div class="quick-wallet-limit-note">${getBetLimitMessage()}</div>
     `;
 
     container.prepend(panel);
@@ -1988,13 +2039,22 @@ async function connectSocket() {
         return;
     }
 
-    socket = io();
+    socket = io({
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+        timeout: 10000,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 2500
+    });
 
     socket.on('connect', () => {
         const liveFeedStatus = document.getElementById('liveFeedStatus');
         if (liveFeedStatus) {
             liveFeedStatus.textContent = 'synced';
         }
+        refreshLiveChatAvailability();
     });
 
     socket.on('disconnect', () => {
@@ -2002,6 +2062,12 @@ async function connectSocket() {
         if (liveFeedStatus) {
             liveFeedStatus.textContent = 'reconnecting';
         }
+        refreshLiveChatAvailability();
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        refreshLiveChatAvailability();
     });
 
     socket.on('casino:snapshot', (payload) => {
@@ -2031,7 +2097,11 @@ async function connectSocket() {
     });
 
     socket.on('chat:error', (payload) => {
-        showNotification(payload?.message || 'Chat could not send.', 'error');
+        const message = payload?.message || 'Chat could not send.';
+        showNotification(message, 'error');
+        if (currentPlayer && /login first/i.test(message)) {
+            recoverSocketSession();
+        }
     });
 
     socket.on('newBet', (bet) => {
@@ -2088,10 +2158,16 @@ function updateStatsDisplay(stats) {
     const statWagered = document.getElementById('statWagered');
     const statWins = document.getElementById('statWins');
     const statBiggest = document.getElementById('statBiggest');
+    const statBiggestLoss = document.getElementById('statBiggestLoss');
+    const statTotalProfit = document.getElementById('statTotalProfit');
+    const statTotalLost = document.getElementById('statTotalLost');
 
     if (statWagered) statWagered.textContent = '$' + formatAmount(stats.totalWagered || 0);
     if (statWins) statWins.textContent = `${stats.wins || 0}`;
     if (statBiggest) statBiggest.textContent = '$' + formatAmount(stats.biggestWin || 0);
+    if (statBiggestLoss) statBiggestLoss.textContent = '$' + formatAmount(stats.biggestLoss || 0);
+    if (statTotalProfit) statTotalProfit.textContent = '$' + formatAmount(stats.totalProfit || 0);
+    if (statTotalLost) statTotalLost.textContent = '$' + formatAmount(stats.totalLost || 0);
 }
 
 async function loadRecentBets() {
@@ -2287,6 +2363,8 @@ window.parseAmountInput = parseAmountInput;
 window.readAmountInput = readAmountInput;
 window.setAmountInputValue = setAmountInputValue;
 window.enhanceAmountInputs = enhanceAmountInputs;
+window.validateGameBetAmount = validateGameBetAmount;
+window.getBetLimitMessage = getBetLimitMessage;
 window.dispatchSiteNotification = dispatchSiteNotification;
 window.playUiSound = playUiSound;
 window.playServerGame = playServerGame;
