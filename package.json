@@ -1,0 +1,22 @@
+{
+  "name": "bingung-gambling-website",
+  "version": "1.0.0",
+  "description": "Minecraft gambling website with code authentication",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.6.5",
+    "express-session": "^1.17.3",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
+    "socket.io": "^4.6.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
