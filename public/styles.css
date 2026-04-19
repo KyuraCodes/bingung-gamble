@@ -6771,3 +6771,552 @@ select {
         font-size: 1.5rem;
     }
 }
+
+/* Main shell refresh */
+body,
+button,
+input,
+select,
+textarea,
+.live-sidebar,
+.game-stage,
+.feed-block,
+.feed-block-header,
+.home-shell,
+.deal-nodeal-game,
+.crash-game {
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.story-title,
+.brand-mark,
+.sidebar-title,
+.topbar-title-row h2,
+.games-menu-copy strong,
+.home-section-head h3,
+.home-balance-tile strong,
+.home-game-card strong {
+    font-family: var(--font-display);
+}
+
+.sidebar,
+#sidebarToggle,
+#floorPulseCard {
+    display: none !important;
+}
+
+.app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.topbar {
+    align-items: center;
+    display: grid !important;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.topbar-copy,
+.topbar-actions,
+.topbar-balance-chip,
+.game-stage,
+.feed-sidebar,
+.chat-sidebar,
+.deal-stage,
+.deal-sidebar,
+.home-section,
+.home-featured-grid,
+.home-games-grid,
+.deal-show-board,
+.deal-board-core,
+.deal-case-grid,
+.deal-value-column,
+.crash-shell,
+.crash-stage-panel,
+.crash-bet-panel {
+    min-width: 0;
+}
+
+.topbar-utility-row {
+    align-items: center;
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.top-games-nav {
+    position: relative;
+}
+
+.games-menu-button {
+    align-items: center;
+    background:
+        linear-gradient(180deg, rgba(15, 25, 31, 0.98), rgba(6, 11, 15, 0.99)),
+        linear-gradient(120deg, rgba(55, 181, 255, 0.14), transparent 58%);
+    border: 1px solid rgba(55, 181, 255, 0.18);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 10px;
+    padding: 10px 14px;
+    text-transform: uppercase;
+}
+
+.games-menu-button:hover,
+.games-menu-button:focus-visible,
+.games-menu-button.is-open {
+    border-color: rgba(55, 181, 255, 0.34);
+    box-shadow: 0 18px 32px rgba(2, 8, 23, 0.24);
+}
+
+.games-menu-panel {
+    background:
+        linear-gradient(180deg, rgba(10, 16, 21, 0.99), rgba(5, 9, 13, 0.995)),
+        linear-gradient(135deg, rgba(55, 181, 255, 0.1), transparent 52%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    box-shadow: 0 28px 52px rgba(2, 8, 23, 0.42);
+    left: 0;
+    margin-top: 10px;
+    padding: 14px;
+    position: absolute;
+    top: 100%;
+    width: min(720px, calc(100vw - 48px));
+    z-index: 50;
+}
+
+.games-menu-section + .games-menu-section {
+    margin-top: 14px;
+}
+
+.games-menu-label {
+    color: var(--text-muted);
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.games-menu-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.games-menu-grid.is-featured {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.games-menu-card {
+    align-items: center;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 12px;
+    text-align: left;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.games-menu-card:hover,
+.games-menu-card:focus-visible,
+.games-menu-card.active {
+    border-color: rgba(55, 181, 255, 0.32);
+    box-shadow: 0 18px 32px rgba(2, 8, 23, 0.24);
+    transform: translateY(-1px);
+}
+
+.games-menu-card.is-featured {
+    align-content: start;
+    grid-template-columns: 1fr;
+    min-height: 120px;
+}
+
+.games-menu-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    display: inline-grid;
+    height: 36px;
+    place-items: center;
+    width: 36px;
+}
+
+.games-menu-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.games-menu-copy small,
+.home-game-card p,
+.home-game-footer {
+    color: var(--text-secondary);
+}
+
+.games-menu-badge {
+    color: #63fca9;
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.game-wrapper {
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.game-stage {
+    order: 1;
+}
+
+.chat-sidebar {
+    order: 2;
+}
+
+.feed-sidebar {
+    order: 3;
+}
+
+.chat-sidebar,
+.feed-sidebar,
+.deal-sidebar,
+.sportsbook-slip {
+    max-height: none !important;
+    position: static !important;
+    top: auto !important;
+}
+
+.live-sidebar {
+    border-radius: 18px;
+    padding: 16px;
+}
+
+.live-chat-messages,
+.live-bets {
+    max-height: 420px;
+}
+
+.chat-message-top {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.chat-message-heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chat-message-time {
+    margin-left: auto;
+}
+
+.chat-message-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-2px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.chat-message:hover .chat-message-actions,
+.chat-message:focus-within .chat-message-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.chat-tip-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 6px 10px;
+}
+
+.chat-tip-btn.is-ghost {
+    background: rgba(55, 181, 255, 0.08);
+    border-color: rgba(55, 181, 255, 0.18);
+}
+
+.home-shell {
+    display: grid;
+    gap: 18px;
+}
+
+.home-welcome-band,
+.home-section {
+    background:
+        linear-gradient(180deg, rgba(10, 17, 22, 0.98), rgba(6, 10, 13, 0.99)),
+        linear-gradient(135deg, rgba(55, 181, 255, 0.08), transparent 58%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 18px;
+}
+
+.home-welcome-band {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.86fr);
+}
+
+.home-welcome-copy {
+    display: grid;
+    gap: 12px;
+}
+
+.home-welcome-copy p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 68ch;
+}
+
+.home-welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.home-balance-rack {
+    display: grid;
+    gap: 10px;
+}
+
+.home-balance-tile {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+}
+
+.home-balance-tile span,
+.home-game-kicker {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.home-balance-tile strong {
+    font-size: clamp(1.2rem, 2vw, 1.8rem);
+}
+
+.home-section {
+    display: grid;
+    gap: 14px;
+}
+
+.home-section-head {
+    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.home-featured-grid,
+.home-games-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-game-card {
+    appearance: none;
+    background:
+        linear-gradient(180deg, rgba(17, 24, 31, 0.98), rgba(7, 11, 15, 0.99)),
+        linear-gradient(135deg, rgba(55, 181, 255, 0.1), transparent 58%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    gap: 10px;
+    min-height: 168px;
+    padding: 16px;
+    text-align: left;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.home-game-card:hover,
+.home-game-card:focus-visible,
+.home-game-card.active {
+    border-color: rgba(55, 181, 255, 0.3);
+    box-shadow: 0 18px 30px rgba(2, 8, 23, 0.28);
+    transform: translateY(-2px);
+}
+
+.home-game-card.is-featured {
+    background:
+        linear-gradient(180deg, rgba(24, 20, 11, 0.98), rgba(10, 8, 5, 0.99)),
+        linear-gradient(135deg, rgba(255, 191, 73, 0.12), transparent 58%);
+    border-color: rgba(255, 191, 73, 0.16);
+}
+
+.home-game-card p {
+    line-height: 1.55;
+}
+
+.home-game-footer {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-top: auto;
+}
+
+.crash-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+}
+
+.sportsbook-quick-bets {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.deal-nodeal-layout {
+    grid-template-columns: minmax(0, 1.24fr) minmax(300px, 0.78fr) !important;
+}
+
+.deal-stage-head {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+}
+
+.deal-stage-copy p {
+    max-width: 62ch;
+}
+
+.deal-stage-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deal-show-board {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.deal-value-column,
+.deal-value-column-full {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.deal-value-pill,
+.deal-stage-stat,
+.pulse-metric,
+.summary-tile {
+    min-width: 0;
+}
+
+.deal-case-grid {
+    gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.deal-case {
+    border-radius: 8px;
+    min-height: 124px;
+    padding: 12px;
+}
+
+.deal-case strong {
+    overflow-wrap: anywhere;
+}
+
+.deal-case-number {
+    font-size: clamp(1.35rem, 2vw, 1.9rem);
+}
+
+@media (max-width: 1280px) {
+    .topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar-balance-chip,
+    .topbar-actions {
+        justify-self: start;
+        width: 100%;
+    }
+
+    .home-featured-grid,
+    .home-games-grid,
+    .games-menu-grid.is-featured,
+    .deal-value-column,
+    .deal-value-column-full {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .home-welcome-band,
+    .deal-nodeal-layout,
+    .crash-shell,
+    .deal-stage-head {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .games-menu-panel {
+        width: min(560px, calc(100vw - 28px));
+    }
+
+    .games-menu-grid,
+    .home-featured-grid,
+    .home-games-grid,
+    .deal-case-grid,
+    .topbar-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chat-message-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
+}
+
+@media (max-width: 720px) {
+    .topbar {
+        padding: 14px;
+    }
+
+    .games-menu-panel {
+        left: 0;
+        width: min(92vw, 420px);
+    }
+
+    .games-menu-grid,
+    .games-menu-grid.is-featured,
+    .home-featured-grid,
+    .home-games-grid,
+    .deal-case-grid,
+    .deal-value-column,
+    .deal-value-column-full,
+    .topbar-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .live-chat-messages,
+    .live-bets {
+        max-height: none;
+    }
+
+    .chat-message {
+        grid-template-columns: 1fr;
+    }
+}

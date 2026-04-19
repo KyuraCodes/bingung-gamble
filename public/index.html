@@ -158,12 +158,21 @@
                 <main class="main-content">
                     <header class="topbar">
                         <div class="topbar-copy">
-                            <span class="topbar-eyebrow" id="gameEyebrow">Burst Room</span>
-                            <div class="topbar-title-row">
-                                <h2 id="gameTitle">Crash</h2>
-                                <span class="mode-chip" id="gameModeChip">High Tempo</span>
+                            <div class="topbar-utility-row">
+                                <div class="top-games-nav">
+                                    <button class="games-menu-button" id="topGamesButton" type="button" aria-expanded="false">
+                                        <span>Games</span>
+                                        <i class="fas fa-caret-down"></i>
+                                    </button>
+                                    <div class="games-menu-panel" id="topGamesMenu" hidden></div>
+                                </div>
                             </div>
-                            <p id="gameDescription">Ride the multiplier, bank in time, and keep the streak alive.</p>
+                            <span class="topbar-eyebrow" id="gameEyebrow">Control Room</span>
+                            <div class="topbar-title-row">
+                                <h2 id="gameTitle">Main</h2>
+                                <span class="mode-chip" id="gameModeChip">Featured</span>
+                            </div>
+                            <p id="gameDescription">Jump into the featured games, keep your wallet in one place, and move around the floor without the old scuffed sidebar.</p>
                         </div>
 
                         <button id="topbarWalletCard" class="topbar-balance-chip" type="button" aria-label="Open wallet and profile hub">
@@ -273,9 +282,9 @@
                             </div>
                             <button id="floorPulseCard" class="floor-pulse-card feed-focus-card" type="button">
                                 <div>
-                                    <span class="summary-label">Floor Pulse</span>
+                                    <span class="summary-label">Action Radar</span>
                                     <strong id="summaryGlobalBets">0 bets</strong>
-                                    <p id="betFeedInsight">Fresh slips, live chat, and every wallet move pulse from here.</p>
+                                    <p id="betFeedInsight">Latest website bets and results land here.</p>
                                 </div>
                                 <div class="pulse-metrics">
                                     <div class="pulse-metric">

@@ -1,7 +1,7 @@
 let currentPlayer = null;
 let socket = null;
 const isBetaMode = false;
-let currentGame = 'crash';
+let currentGame = 'main';
 let playerStats = null;
 let audioContext = null;
 let soundEnabled = true;
@@ -60,6 +60,14 @@ const GAME_MIN_BET = 1e5;
 const GAME_MAX_BET = 5e15;
 
 const GAME_META = {
+    main: {
+        title: 'Main',
+        eyebrow: 'Control Room',
+        chip: 'Featured',
+        stage: 'Main Floor',
+        description: 'Jump into the featured games, keep your wallet in one place, and move around the floor without the old scuffed sidebar.',
+        icon: 'fa-table-cells-large'
+    },
     crash: {
         title: 'Crash',
         eyebrow: 'Burst Room',
@@ -211,6 +219,9 @@ const GAME_META = {
 };
 
 const GAME_ORDER = Object.keys(GAME_META);
+const PLAYABLE_GAME_ORDER = GAME_ORDER.filter((game) => !['main', 'profile'].includes(game));
+const FEATURED_HOME_GAMES = ['dealnodeal', 'crash', 'mines', 'cases'];
+const QUICK_SWITCH_GAMES = ['dealnodeal', 'crash', 'mines', 'cases', 'blackjack', 'jackpot'];
 
 const EMPTY_GLOBAL_STATS = {
     onlinePlayers: 0,
@@ -267,8 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChatQuickReplies();
     setupInteractiveShell();
     setupDashboardActions();
+    setupTopGamesMenu();
     renderModeStrip();
     renderQuickSwitch();
+    renderTopGamesMenu();
     setupGameContentEnhancer();
     setupProvablyFairPanel();
     renderProvablyFairPanel();
@@ -395,12 +408,31 @@ function validateGameBetAmount(amount, label = 'Bet') {
     return true;
 }
 
+function clampGameBetAmount(amount) {
+    const wager = Math.floor(Number(amount || 0));
+    if (!Number.isFinite(wager) || wager <= 0) {
+        return GAME_MIN_BET;
+    }
+
+    return Math.max(GAME_MIN_BET, Math.min(GAME_MAX_BET, wager));
+}
+
 function setAmountInputValue(inputId, value) {
     const input = document.getElementById(inputId);
     if (!input) return;
 
     input.dataset.rawAmountValue = formatCompactAmountInput(value);
     input.value = formatExpandedAmountInput(value);
+}
+
+function setBetInputFraction(inputId, fraction = 1) {
+    const balance = Number(currentPlayer?.balance || 0);
+    if (!Number.isFinite(balance) || balance <= 0) {
+        showNotification('You need balance before using quick bet helpers.', 'info');
+        return;
+    }
+
+    setAmountInputValue(inputId, clampGameBetAmount(balance * Number(fraction || 1)));
 }
 
 function enhanceAmountInputs(scope = document) {
@@ -976,6 +1008,11 @@ function updateGlobalStatsDisplay(stats = {}) {
     const volume = document.getElementById('summaryGlobalVolume');
     if (volume) {
         volume.textContent = `$${formatAmount(globalRealtimeStats.totalWagered)}`;
+    }
+
+    const homeOnlineValue = document.getElementById('homeOnlineValue');
+    if (homeOnlineValue) {
+        homeOnlineValue.textContent = `${globalRealtimeStats.onlinePlayers || 0}`;
     }
 }
 
@@ -2285,6 +2322,16 @@ function updatePlayerInfo() {
         vaultTransferBalance.textContent = '$' + formatAmount(currentPlayer.vaultBalance);
     }
 
+    const homeBalanceValue = document.getElementById('homeBalanceValue');
+    if (homeBalanceValue) {
+        homeBalanceValue.textContent = '$' + formatAmount(currentPlayer.balance);
+    }
+
+    const homeVaultValue = document.getElementById('homeVaultValue');
+    if (homeVaultValue) {
+        homeVaultValue.textContent = '$' + formatAmount(currentPlayer.vaultBalance);
+    }
+
     const profileLevel = document.getElementById('profileLevelValue');
     if (profileLevel) {
         profileLevel.textContent = `Level ${currentPlayer.level}/${currentPlayer.maxLevel}`;
@@ -2326,7 +2373,7 @@ function renderModeStrip() {
     const modeShowcase = document.getElementById('modeShowcase');
 
     if (loginModeStrip) {
-        loginModeStrip.innerHTML = GAME_ORDER.map((game) => {
+        loginModeStrip.innerHTML = PLAYABLE_GAME_ORDER.map((game) => {
             const meta = getGameMeta(game);
             return `
                 <span class="mode-pill">
@@ -2339,7 +2386,7 @@ function renderModeStrip() {
     }
 
     if (modeShowcase) {
-        modeShowcase.innerHTML = GAME_ORDER.map((game) => {
+        modeShowcase.innerHTML = PLAYABLE_GAME_ORDER.map((game) => {
             const meta = getGameMeta(game);
             return `
                 <button class="showcase-card ${game === currentGame ? 'active' : ''}" data-showcase-game="${game}" type="button">
@@ -2357,7 +2404,7 @@ function renderModeStrip() {
 
     const supportCount = document.getElementById('supportCount');
     if (supportCount) {
-        supportCount.textContent = `${GAME_ORDER.length} Modes`;
+        supportCount.textContent = `${PLAYABLE_GAME_ORDER.length} Modes`;
     }
 }
 
@@ -2365,7 +2412,7 @@ function renderQuickSwitch() {
     const quickSwitch = document.getElementById('gameQuickSwitch');
     if (!quickSwitch) return;
 
-    quickSwitch.innerHTML = GAME_ORDER.slice(0, 6).map((game) => {
+    quickSwitch.innerHTML = QUICK_SWITCH_GAMES.filter((game) => GAME_META[game]).map((game) => {
         const meta = getGameMeta(game);
         return `
             <button class="switch-chip ${game === currentGame ? 'active' : ''}" data-quick-game="${game}" type="button">
@@ -2377,6 +2424,194 @@ function renderQuickSwitch() {
 
     quickSwitch.querySelectorAll('[data-quick-game]').forEach((button) => {
         button.addEventListener('click', () => setActiveGame(button.dataset.quickGame));
+    });
+}
+
+function renderTopGamesMenu() {
+    const menu = document.getElementById('topGamesMenu');
+    if (!menu) {
+        return;
+    }
+
+    const featuredGames = FEATURED_HOME_GAMES.filter((game) => GAME_META[game]);
+    const allGames = PLAYABLE_GAME_ORDER.filter((game) => !featuredGames.includes(game));
+
+    menu.innerHTML = `
+        <div class="games-menu-section">
+            <span class="games-menu-label">Featured</span>
+            <div class="games-menu-grid is-featured">
+                ${featuredGames.map((game) => {
+                    const meta = getGameMeta(game);
+                    return `
+                        <button class="games-menu-card is-featured ${game === currentGame ? 'active' : ''}" type="button" data-menu-game="${game}">
+                            <span class="games-menu-icon"><i class="fas ${meta.icon}"></i></span>
+                            <span class="games-menu-copy">
+                                <strong>${meta.title}</strong>
+                                <small>${meta.chip}</small>
+                            </span>
+                            ${meta.badge ? `<em class="games-menu-badge">${meta.badge}</em>` : ''}
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+        <div class="games-menu-section">
+            <span class="games-menu-label">All Games</span>
+            <div class="games-menu-grid">
+                ${allGames.map((game) => {
+                    const meta = getGameMeta(game);
+                    return `
+                        <button class="games-menu-card ${game === currentGame ? 'active' : ''}" type="button" data-menu-game="${game}">
+                            <span class="games-menu-icon"><i class="fas ${meta.icon}"></i></span>
+                            <span class="games-menu-copy">
+                                <strong>${meta.title}</strong>
+                                <small>${meta.eyebrow}</small>
+                            </span>
+                            ${meta.badge ? `<em class="games-menu-badge">${meta.badge}</em>` : ''}
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+
+    menu.querySelectorAll('[data-menu-game]').forEach((button) => {
+        button.addEventListener('click', () => {
+            toggleTopGamesMenu(false);
+            setActiveGame(button.dataset.menuGame);
+        });
+    });
+}
+
+function toggleTopGamesMenu(forceState) {
+    const menu = document.getElementById('topGamesMenu');
+    const button = document.getElementById('topGamesButton');
+    if (!menu || !button) {
+        return;
+    }
+
+    const nextState = typeof forceState === 'boolean'
+        ? forceState
+        : menu.hidden;
+
+    menu.hidden = !nextState;
+    button.setAttribute('aria-expanded', String(nextState));
+    button.classList.toggle('is-open', nextState);
+}
+
+function setupTopGamesMenu() {
+    const button = document.getElementById('topGamesButton');
+    const menu = document.getElementById('topGamesMenu');
+    if (!button || !menu) {
+        return;
+    }
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        renderTopGamesMenu();
+        toggleTopGamesMenu();
+        playUiSound('toggle-on');
+    });
+
+    menu.addEventListener('click', (event) => {
+        event.stopPropagation();
+    });
+
+    document.addEventListener('click', () => {
+        toggleTopGamesMenu(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            toggleTopGamesMenu(false);
+        }
+    });
+}
+
+function loadMainGame(container) {
+    if (!currentPlayer) {
+        container.innerHTML = '<div class="game-container"><div class="feed-empty-state">Login first to open the floor.</div></div>';
+        return;
+    }
+
+    const featuredGames = FEATURED_HOME_GAMES.map((game) => {
+        const meta = getGameMeta(game);
+        return `
+            <button class="home-game-card is-featured" type="button" data-home-game="${game}">
+                <span class="home-game-kicker">${meta.eyebrow}</span>
+                <strong>${meta.title}</strong>
+                <p>${meta.description}</p>
+                <span class="home-game-footer">
+                    <span><i class="fas ${meta.icon}"></i></span>
+                    <span>${meta.chip}</span>
+                </span>
+            </button>
+        `;
+    }).join('');
+
+    const allGames = PLAYABLE_GAME_ORDER.map((game) => {
+        const meta = getGameMeta(game);
+        return `
+            <button class="home-game-card" type="button" data-home-game="${game}">
+                <span class="home-game-kicker">${meta.eyebrow}</span>
+                <strong>${meta.title}</strong>
+                <p>${meta.chip}</p>
+                <span class="home-game-footer">
+                    <span><i class="fas ${meta.icon}"></i></span>
+                    <span>${meta.badge || 'Open'}</span>
+                </span>
+            </button>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="home-shell">
+            <section class="home-welcome-band">
+                <div class="home-welcome-copy">
+                    <span class="banner-tag">Welcome Back</span>
+                    <h3>${currentPlayer.username}, pick your next table.</h3>
+                    <p>Deal or No Deal is pushed to the front, the wallet stays clean in the top bar, and the whole floor scales properly on smaller screens now.</p>
+                    <div class="home-welcome-actions">
+                        <button class="btn-primary" type="button" data-home-game="dealnodeal">Play Deal or No Deal</button>
+                        <button class="btn-secondary" type="button" data-home-game="profile">Open Profile</button>
+                    </div>
+                </div>
+                <div class="home-balance-rack">
+                    <div class="home-balance-tile">
+                        <span>Website Balance</span>
+                        <strong id="homeBalanceValue">$${formatAmount(currentPlayer.balance)}</strong>
+                    </div>
+                    <div class="home-balance-tile">
+                        <span>Minecraft Balance</span>
+                        <strong id="homeVaultValue">$${formatAmount(currentPlayer.vaultBalance)}</strong>
+                    </div>
+                    <div class="home-balance-tile">
+                        <span>Players Online</span>
+                        <strong id="homeOnlineValue">${globalRealtimeStats?.onlinePlayers || 0}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-section">
+                <div class="home-section-head">
+                    <span class="banner-tag">Featured</span>
+                    <h3>Big update picks</h3>
+                </div>
+                <div class="home-featured-grid">${featuredGames}</div>
+            </section>
+
+            <section class="home-section">
+                <div class="home-section-head">
+                    <span class="banner-tag">All Games</span>
+                    <h3>Everything on the floor</h3>
+                </div>
+                <div class="home-games-grid">${allGames}</div>
+            </section>
+        </div>
+    `;
+
+    container.querySelectorAll('[data-home-game]').forEach((button) => {
+        button.addEventListener('click', () => setActiveGame(button.dataset.homeGame));
     });
 }
 
@@ -2500,7 +2735,7 @@ function loadProfileGame(container) {
 }
 
 function renderQuickWalletPanel(container, game) {
-    if (!currentPlayer || game === 'profile') {
+    if (!currentPlayer || game === 'profile' || game === 'main' || game === 'dealnodeal') {
         return;
     }
 
@@ -2522,9 +2757,9 @@ function renderQuickWalletPanel(container, game) {
             </div>
         </div>
         <button class="quick-wallet-core" id="quickWalletCore" type="button">
-            <span class="quick-wallet-core-kicker">Website Balance</span>
+            <span class="quick-wallet-core-kicker">Wallet Hub</span>
             <strong id="walletTransferBalance">$${formatAmount(currentPlayer.balance)}</strong>
-            <span class="quick-wallet-core-copy">Deposit, bet, and withdraw around one clean number.</span>
+            <span class="quick-wallet-core-copy">Profile, deposits, and withdrawals stay one tap away.</span>
         </button>
         <div class="quick-wallet-lane quick-wallet-lane-right">
             <form id="walletWithdrawForm" class="quick-wallet-form">
@@ -2555,6 +2790,8 @@ function renderQuickWalletPanel(container, game) {
 
 function setActiveGame(game) {
     currentGame = game;
+    toggleTopGamesMenu(false);
+    renderTopGamesMenu();
     updateGameChrome(game);
     loadGame(game);
 }
@@ -2578,6 +2815,14 @@ function updateGameChrome(game) {
 
     document.querySelectorAll('[data-quick-game]').forEach((item) => {
         item.classList.toggle('active', item.dataset.quickGame === game);
+    });
+
+    document.querySelectorAll('[data-home-game]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.homeGame === game);
+    });
+
+    document.querySelectorAll('[data-menu-game]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.menuGame === game);
     });
 }
 
@@ -3018,6 +3263,7 @@ function showNotification(message, type = 'info') {
 window.parseAmountInput = parseAmountInput;
 window.readAmountInput = readAmountInput;
 window.setAmountInputValue = setAmountInputValue;
+window.setBetInputFraction = setBetInputFraction;
 window.enhanceAmountInputs = enhanceAmountInputs;
 window.primeModeMotion = primeModeMotion;
 window.validateGameBetAmount = validateGameBetAmount;

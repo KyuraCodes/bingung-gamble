@@ -49,9 +49,9 @@ function loadCrashGame(container) {
                         <input id="crashBetAmount" class="bet-input" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
                         <div class="quick-bets sportsbook-quick-bets">
                             <button class="quick-bet-btn" type="button" onclick="setCrashBet(100000)">100K</button>
-                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(500000)">500K</button>
                             <button class="quick-bet-btn" type="button" onclick="setCrashBet(1000000)">1M</button>
-                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(Math.floor(currentPlayer.balance))">MAX</button>
+                            <button class="quick-bet-btn" type="button" onclick="setBetInputFraction('crashBetAmount', 0.5)">HALF</button>
+                            <button class="quick-bet-btn" type="button" onclick="setBetInputFraction('crashBetAmount', 1)">MAX</button>
                         </div>
                     </div>
 
@@ -228,7 +228,7 @@ function loadDealnodealGame(container) {
                     <div class="quick-bets sportsbook-quick-bets">
                         <button class="quick-bet-btn" type="button" data-deal-amount="100000">100K</button>
                         <button class="quick-bet-btn" type="button" data-deal-amount="1000000">1M</button>
-                        <button class="quick-bet-btn" type="button" data-deal-amount="10000000">10M</button>
+                        <button class="quick-bet-btn" type="button" data-deal-amount="half">HALF</button>
                         <button class="quick-bet-btn" type="button" data-deal-amount="max">MAX</button>
                     </div>
 
@@ -252,7 +252,9 @@ function loadDealnodealGame(container) {
             const rawValue = button.dataset.dealAmount;
             const nextAmount = rawValue === 'max'
                 ? Math.floor(Number(currentPlayer?.balance || 0))
-                : Number(rawValue);
+                : rawValue === 'half'
+                    ? Math.floor(Number(currentPlayer?.balance || 0) * 0.5)
+                    : Number(rawValue);
             if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
                 return;
             }
@@ -412,8 +414,8 @@ function renderDealNoDealState() {
             </div>
 
             <div class="deal-show-board">
-                <div class="deal-value-column">
-                    ${moneyLadder.slice(0, 8).map((entry) => `
+                <div class="deal-value-column deal-value-column-full">
+                    ${moneyLadder.map((entry) => `
                         <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
                             <span>${entry.multiplierLabel}</span>
                             <strong>$${entry.displayValue}</strong>
@@ -465,15 +467,6 @@ function renderDealNoDealState() {
                         `;
                     }).join('')}
                     </div>
-                </div>
-
-                <div class="deal-value-column">
-                    ${moneyLadder.slice(8).map((entry) => `
-                        <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
-                            <span>${entry.multiplierLabel}</span>
-                            <strong>$${entry.displayValue}</strong>
-                        </div>
-                    `).join('')}
                 </div>
             </div>
         </div>
