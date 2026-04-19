@@ -6,7 +6,7 @@
     <title>BingungSMP Gamble</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Oxanium:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -159,6 +159,12 @@
                     <header class="topbar">
                         <div class="topbar-copy">
                             <div class="topbar-utility-row">
+                                <div class="top-shell-switches">
+                                    <button class="top-section-button" id="topHomeButton" type="button">
+                                        <i class="fas fa-house"></i>
+                                        <span>Home</span>
+                                    </button>
+                                </div>
                                 <div class="top-games-nav">
                                     <button class="games-menu-button" id="topGamesButton" type="button" aria-expanded="false">
                                         <span>Games</span>
@@ -167,12 +173,12 @@
                                     <div class="games-menu-panel" id="topGamesMenu" hidden></div>
                                 </div>
                             </div>
-                            <span class="topbar-eyebrow" id="gameEyebrow">Control Room</span>
+                            <span class="topbar-eyebrow" id="gameEyebrow">Preview Hub</span>
                             <div class="topbar-title-row">
-                                <h2 id="gameTitle">Main</h2>
-                                <span class="mode-chip" id="gameModeChip">Featured</span>
+                                <h2 id="gameTitle">Home</h2>
+                                <span class="mode-chip" id="gameModeChip">Live Lobby</span>
                             </div>
-                            <p id="gameDescription">Jump into the featured games, keep your wallet in one place, and move around the floor without the old scuffed sidebar.</p>
+                            <p id="gameDescription">Preview the main floor, watch live momentum, and jump into the next game without losing the chat and bet feed.</p>
                         </div>
 
                         <button id="topbarWalletCard" class="topbar-balance-chip" type="button" aria-label="Open wallet and profile hub">
@@ -261,7 +267,7 @@
                             <div class="stage-header">
                                 <div>
                                     <span class="stage-label" id="stageLabel">Featured Table</span>
-                                    <strong class="stage-focus" id="stageFocus">Crash Arena</strong>
+                                    <strong class="stage-focus" id="stageFocus">Lobby Overview</strong>
                                 </div>
                                 <div class="game-quick-switch" id="gameQuickSwitch"></div>
                             </div>
@@ -275,8 +281,8 @@
                         <aside class="feed-sidebar live-sidebar">
                             <div class="live-header">
                                 <div>
-                                    <span class="live-label">Floor Feed</span>
-                                    <strong>Hot action</strong>
+                                    <span class="live-label">Global Bets</span>
+                                    <strong>Wins, losses, and volume</strong>
                                 </div>
                                 <span class="live-status">watchlist</span>
                             </div>
@@ -353,6 +359,13 @@
                 <input id="chatTipAmount" type="text" placeholder="10k" data-amount-input="true" autocomplete="off">
             </label>
             <button id="chatTipSend" class="btn-primary" type="button">Send Tip</button>
+        </div>
+    </div>
+
+    <div id="playerProfileModal" class="profile-modal" aria-hidden="true">
+        <div class="profile-modal-card">
+            <button id="playerProfileClose" class="modal-close" type="button" aria-label="Close player profile">&times;</button>
+            <div id="playerProfileModalContent" class="profile-modal-content"></div>
         </div>
     </div>
 

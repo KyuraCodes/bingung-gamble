@@ -209,7 +209,7 @@ let dealNoDealState = null;
 function loadDealnodealGame(container) {
     container.innerHTML = `
         <div class="game-container deal-nodeal-game">
-            <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.45fr) minmax(320px, 0.9fr)">
+            <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.62fr) minmax(340px, 0.82fr)">
                 <section class="deal-stage">
                     <div class="deal-hero">
                         <span class="banner-tag">Deal or No Deal</span>
@@ -369,6 +369,8 @@ function renderDealNoDealState() {
     const offerHistory = Array.isArray(dealNoDealState?.offerHistory) ? dealNoDealState.offerHistory : [];
     const currentOffer = Number.isFinite(Number(dealNoDealState?.bankerOffer)) ? Number(dealNoDealState.bankerOffer) : null;
     const stageStateClass = resolved ? 'is-resolved' : awaitingDecision ? 'is-live' : isStarted ? 'is-active' : 'is-idle';
+    const leftMoneyLadder = moneyLadder.slice(0, 8);
+    const rightMoneyLadder = moneyLadder.slice(8).reverse();
     const boardHeadline = resolved
         ? 'Final reveal'
         : !isStarted
@@ -414,8 +416,8 @@ function renderDealNoDealState() {
             </div>
 
             <div class="deal-show-board">
-                <div class="deal-value-column deal-value-column-full">
-                    ${moneyLadder.map((entry) => `
+                <div class="deal-value-column deal-value-column-left">
+                    ${leftMoneyLadder.map((entry) => `
                         <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
                             <span>${entry.multiplierLabel}</span>
                             <strong>$${entry.displayValue}</strong>
@@ -467,6 +469,15 @@ function renderDealNoDealState() {
                         `;
                     }).join('')}
                     </div>
+                </div>
+
+                <div class="deal-value-column deal-value-column-right">
+                    ${rightMoneyLadder.map((entry) => `
+                        <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
+                            <span>${entry.multiplierLabel}</span>
+                            <strong>$${entry.displayValue}</strong>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         </div>

@@ -14,6 +14,11 @@ let recentBetsFilter = 'all';
 let cachedRecentBets = [];
 let pendingTipRecipient = '';
 let currentOnlinePlayers = [];
+let playerSpotlightProfiles = [];
+const playerProfileCache = new Map();
+let activePlayerProfileUsername = '';
+let playerSpotlightRequestToken = 0;
+let lastPlayerSpotlightSignature = '';
 
 const responsiveGridRegistry = new Set();
 
@@ -61,11 +66,11 @@ const GAME_MAX_BET = 5e15;
 
 const GAME_META = {
     main: {
-        title: 'Main',
-        eyebrow: 'Control Room',
-        chip: 'Featured',
-        stage: 'Main Floor',
-        description: 'Jump into the featured games, keep your wallet in one place, and move around the floor without the old scuffed sidebar.',
+        title: 'Home',
+        eyebrow: 'Preview Hub',
+        chip: 'Live Lobby',
+        stage: 'Lobby Overview',
+        description: 'Preview the main floor, watch live momentum, and jump into the next game without losing the chat and bet feed.',
         icon: 'fa-table-cells-large'
     },
     crash: {
@@ -277,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupBetFeedFilters();
     setupChatQuickReplies();
     setupInteractiveShell();
+    setupPlayerProfileModal();
     setupDashboardActions();
     setupTopGamesMenu();
     renderModeStrip();
@@ -783,16 +789,25 @@ function createChatAvatarUrl(username) {
     return `https://mc-heads.net/avatar/${encodeURIComponent(username || 'Steve')}/48`;
 }
 
+function createPlayerSkinRenderUrl(username, size = 120) {
+    return `https://mc-heads.net/player/${encodeURIComponent(username || 'Steve')}/${size}`;
+}
+
+function buildPlayerProfileApiUrl(username) {
+    return `/api/player/profile/${encodeURIComponent(username || '')}`;
+}
+
 function normalizePresencePlayers(players = []) {
     const normalizedPlayers = (Array.isArray(players) ? players : [])
         .map((player) => {
             if (typeof player === 'string') {
-                return { username: player, walletBalance: null };
+                return { username: player, walletBalance: null, level: null };
             }
 
             return {
                 username: String(player?.username || '').trim(),
-                walletBalance: Number.isFinite(Number(player?.walletBalance)) ? Number(player.walletBalance) : null
+                walletBalance: Number.isFinite(Number(player?.walletBalance)) ? Number(player.walletBalance) : null,
+                level: Number.isFinite(Number(player?.level)) ? Number(player.level) : null
             };
         })
         .filter((player) => player.username);
@@ -810,6 +825,10 @@ function normalizePresencePlayers(players = []) {
     });
 
     return uniquePlayers.slice(0, 12);
+}
+
+function getPresenceUsernames(players = currentOnlinePlayers) {
+    return normalizePresencePlayers(players).map((player) => player.username);
 }
 
 function getNormalizedGlobalStats(stats = {}) {
@@ -847,10 +866,10 @@ function updateOnlinePlayerSkins(players = []) {
         button.setAttribute('aria-label', `${username} is online. ${walletText}`);
 
         const image = document.createElement('img');
-        image.src = createChatAvatarUrl(username);
+        image.src = createPlayerSkinRenderUrl(username, 72);
         image.alt = `${username} skin`;
         image.dataset.avatarName = username;
-        image.dataset.avatarSize = '48';
+        image.dataset.avatarSize = '72';
         image.loading = 'lazy';
 
         const label = document.createElement('span');
@@ -861,6 +880,10 @@ function updateOnlinePlayerSkins(players = []) {
         label.append(nameLine, walletLine);
 
         button.append(image, label);
+        button.addEventListener('click', () => {
+            playUiSound('modal-open');
+            openPlayerProfileModal(username);
+        });
         container.appendChild(button);
     });
     setupImageFallbacks(container);
@@ -892,28 +915,24 @@ function renderTopbarOnlineList(players = []) {
         item.dataset.presenceUser = player.username;
 
         const avatar = document.createElement('img');
-        avatar.src = createChatAvatarUrl(player.username);
+        avatar.className = 'online-presence-skin';
+        avatar.src = createPlayerSkinRenderUrl(player.username, 88);
         avatar.alt = `${player.username} skin`;
         avatar.dataset.avatarName = player.username;
-        avatar.dataset.avatarSize = '48';
+        avatar.dataset.avatarSize = '88';
         avatar.loading = 'lazy';
 
         const copy = document.createElement('span');
         const name = document.createElement('strong');
         name.textContent = player.username;
         const meta = document.createElement('small');
-        meta.textContent = walletText;
+        meta.textContent = player.level ? `${walletText} • Level ${player.level}` : walletText;
         copy.append(name, meta);
 
         item.append(avatar, copy);
         item.addEventListener('click', () => {
-            playUiSound('toggle-on');
-            if (currentPlayer?.username && player.username.toLowerCase() === currentPlayer.username.toLowerCase()) {
-                setActiveGame('profile');
-                return;
-            }
-
-            primeChatInput(`@${player.username} `, true);
+            playUiSound('modal-open');
+            openPlayerProfileModal(player.username);
         });
 
         container.appendChild(item);
@@ -959,6 +978,7 @@ function updateOnlinePresenceDisplay(presence = {}) {
 
     renderTopbarOnlineList(players);
     updateOnlinePlayerSkins(players);
+    refreshPlayerSpotlight();
 }
 
 function updateGlobalStatsDisplay(stats = {}) {
@@ -1014,6 +1034,416 @@ function updateGlobalStatsDisplay(stats = {}) {
     if (homeOnlineValue) {
         homeOnlineValue.textContent = `${globalRealtimeStats.onlinePlayers || 0}`;
     }
+
+    if (info) {
+        info.textContent = `${recentBetsExpanded ? '1h window' : 'latest window'} - ${filterCopy}`;
+    }
+    updateHomePreviewStats();
+}
+
+function getHomeHotGameMeta(recentBets = cachedRecentBets) {
+    if (!Array.isArray(recentBets) || recentBets.length === 0) {
+        return getGameMeta('dealnodeal');
+    }
+
+    const hottestGame = recentBets.reduce((accumulator, entry) => {
+        const gameType = String(entry.gameType || 'dealnodeal');
+        accumulator[gameType] = (accumulator[gameType] || 0) + 1;
+        return accumulator;
+    }, {});
+
+    const hottestGameType = Object.entries(hottestGame)
+        .sort((left, right) => right[1] - left[1])[0]?.[0] || 'dealnodeal';
+
+    return getGameMeta(hottestGameType);
+}
+
+function updateHomePreviewStats() {
+    const totalDecisions = Number(globalRealtimeStats?.totalWins || 0) + Number(globalRealtimeStats?.totalLosses || 0);
+    const winRate = totalDecisions > 0
+        ? `${Math.round((Number(globalRealtimeStats.totalWins || 0) / totalDecisions) * 100)}%`
+        : '0%';
+    const featuredMeta = getGameMeta('dealnodeal');
+    const hotGameMeta = getHomeHotGameMeta();
+    const latestSlip = Array.isArray(cachedRecentBets) && cachedRecentBets.length > 0
+        ? cachedRecentBets[0]
+        : null;
+    const latestSlipProfit = Number(latestSlip?.profit || 0);
+
+    const homeWinRateValue = document.getElementById('homeWinRateValue');
+    if (homeWinRateValue) {
+        homeWinRateValue.textContent = winRate;
+    }
+
+    const homeVolumeValue = document.getElementById('homeVolumeValue');
+    if (homeVolumeValue) {
+        homeVolumeValue.textContent = `$${formatAmount(globalRealtimeStats?.totalWagered || 0)}`;
+    }
+
+    const homeNetValue = document.getElementById('homeNetValue');
+    if (homeNetValue) {
+        const netProfit = Number(globalRealtimeStats?.netProfit || 0);
+        homeNetValue.textContent = `${netProfit >= 0 ? '+' : '-'}$${formatAmount(Math.abs(netProfit))}`;
+    }
+
+    const homeHotGameValue = document.getElementById('homeHotGameValue');
+    if (homeHotGameValue) {
+        homeHotGameValue.textContent = hotGameMeta.title;
+    }
+
+    const homeHotGameMeta = document.getElementById('homeHotGameMeta');
+    if (homeHotGameMeta) {
+        homeHotGameMeta.textContent = hotGameMeta.chip;
+    }
+
+    const homeLatestSlipValue = document.getElementById('homeLatestSlipValue');
+    if (homeLatestSlipValue) {
+        homeLatestSlipValue.textContent = latestSlip
+            ? `${latestSlip.username} ${latestSlipProfit >= 0 ? '+' : '-'}$${formatAmount(Math.abs(latestSlipProfit))}`
+            : 'Waiting for the next result';
+    }
+
+    const homeLatestSlipMeta = document.getElementById('homeLatestSlipMeta');
+    if (homeLatestSlipMeta) {
+        homeLatestSlipMeta.textContent = latestSlip
+            ? `${getGameMeta(latestSlip.gameType || 'dealnodeal').title} • ${formatTimeLabel(latestSlip.timestamp)}`
+            : 'Fresh results will show here';
+    }
+}
+
+function renderHomePlayerSpotlight() {
+    const grid = document.getElementById('homeProfilesGrid');
+    if (!grid) {
+        return;
+    }
+
+    if (!Array.isArray(playerSpotlightProfiles) || playerSpotlightProfiles.length === 0) {
+        grid.innerHTML = '<div class="feed-empty-state">When more players join the website, their full-skin cards and stats will show here.</div>';
+        return;
+    }
+
+    grid.innerHTML = playerSpotlightProfiles.map((player) => `
+        <button class="player-spotlight-card" type="button" data-player-profile="${player.username}">
+            <div class="player-spotlight-skin-wrap">
+                <img
+                    class="player-spotlight-skin"
+                    src="${createPlayerSkinRenderUrl(player.username, 120)}"
+                    alt="${player.username} skin"
+                    data-avatar-name="${player.username}"
+                    data-avatar-size="120"
+                    loading="lazy"
+                >
+                <span class="player-spotlight-status ${player.online ? 'is-online' : ''}">
+                    ${player.online ? 'Online' : 'Profile'}
+                </span>
+            </div>
+            <div class="player-spotlight-copy">
+                <div class="player-spotlight-head">
+                    <strong>${player.username}</strong>
+                    <small>Level ${player.level || 1}</small>
+                </div>
+                <div class="player-spotlight-stats">
+                    <span><em>Wallet</em><strong>$${formatAmount(player.walletBalance || 0)}</strong></span>
+                    <span><em>Win Rate</em><strong>${player.winRate || 0}%</strong></span>
+                    <span><em>Profit</em><strong>${Number(player.totalProfit || 0) >= 0 ? '+' : '-'}$${formatAmount(Math.abs(Number(player.totalProfit || 0)))}</strong></span>
+                    <span><em>Biggest Hit</em><strong>$${formatAmount(player.biggestWin || 0)}</strong></span>
+                </div>
+            </div>
+        </button>
+    `).join('');
+
+    grid.querySelectorAll('[data-player-profile]').forEach((button) => {
+        button.addEventListener('click', () => {
+            playUiSound('modal-open');
+            openPlayerProfileModal(button.dataset.playerProfile);
+        });
+    });
+
+    setupImageFallbacks(grid);
+}
+
+async function refreshPlayerSpotlight(force = false) {
+    if (!currentPlayer) {
+        return;
+    }
+
+    const usernames = getPresenceUsernames()
+        .filter((username) => username.toLowerCase() !== currentPlayer.username.toLowerCase())
+        .slice(0, 8);
+    const requestSignature = usernames.join(',').toLowerCase();
+
+    if (!force && requestSignature === lastPlayerSpotlightSignature) {
+        renderHomePlayerSpotlight();
+        return;
+    }
+
+    lastPlayerSpotlightSignature = requestSignature;
+    const requestToken = ++playerSpotlightRequestToken;
+    const query = usernames.length > 0
+        ? `?usernames=${encodeURIComponent(usernames.join(','))}&limit=${Math.max(4, usernames.length)}`
+        : '?limit=6';
+
+    try {
+        const response = await fetch(`/api/player/directory${query}`);
+        const data = await response.json();
+
+        if (requestToken !== playerSpotlightRequestToken) {
+            return;
+        }
+
+        if (!data.success) {
+            throw new Error(data.message || 'Could not load player spotlight');
+        }
+
+        playerSpotlightProfiles = (Array.isArray(data.players) ? data.players : [])
+            .filter((player) => player.username && player.username.toLowerCase() !== currentPlayer.username.toLowerCase())
+            .slice(0, 8);
+
+        playerSpotlightProfiles.forEach((player) => {
+            playerProfileCache.set(player.username.toLowerCase(), player);
+        });
+
+        renderHomePlayerSpotlight();
+    } catch (error) {
+        console.error('Player spotlight error:', error);
+        if (requestToken !== playerSpotlightRequestToken) {
+            return;
+        }
+
+        if (!playerSpotlightProfiles.length) {
+            renderHomePlayerSpotlight();
+        }
+    }
+}
+
+function renderRecentProfileResults(recentBets = []) {
+    if (!Array.isArray(recentBets) || recentBets.length === 0) {
+        return '<div class="profile-modal-empty">No recent website bets logged yet.</div>';
+    }
+
+    return recentBets.map((bet) => {
+        const meta = getGameMeta(bet.gameType || 'dealnodeal');
+        const profit = Number(bet.profit || 0);
+        return `
+            <div class="profile-modal-result-row ${bet.won ? 'is-win' : 'is-loss'}">
+                <div>
+                    <strong>${meta.title}</strong>
+                    <small>${formatTimeLabel(bet.timestamp)}</small>
+                </div>
+                <span>$${formatAmount(bet.amount || 0)}</span>
+                <strong>${profit >= 0 ? '+' : '-'}$${formatAmount(Math.abs(profit))}</strong>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderPlayerProfileModalContent(player = null, state = {}) {
+    const container = document.getElementById('playerProfileModalContent');
+    if (!container) {
+        return;
+    }
+
+    if (state.loading) {
+        container.innerHTML = `
+            <div class="profile-modal-loading">
+                <span class="banner-tag">Player Profile</span>
+                <strong>Loading player intel...</strong>
+                <p>Pulling wallet, level, and recent website activity.</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (state.error || !player) {
+        container.innerHTML = `
+            <div class="profile-modal-loading">
+                <span class="banner-tag">Player Profile</span>
+                <strong>That profile could not be loaded.</strong>
+                <p>${state.error || 'The player may be offline or missing from the database.'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    const isSelf = currentPlayer?.username && player.username.toLowerCase() === currentPlayer.username.toLowerCase();
+    const isOnline = getPresenceUsernames().some((username) => username.toLowerCase() === player.username.toLowerCase()) || !!player.online;
+    const totalProfit = Number(player.totalProfit || 0);
+
+    container.innerHTML = `
+        <div class="profile-modal-hero">
+            <div class="profile-modal-skin">
+                <img
+                    src="${createPlayerSkinRenderUrl(player.username, 180)}"
+                    alt="${player.username} skin"
+                    data-avatar-name="${player.username}"
+                    data-avatar-size="180"
+                    loading="lazy"
+                >
+            </div>
+            <div class="profile-modal-copy">
+                <span class="banner-tag">${isOnline ? 'Online Now' : 'Player Profile'}</span>
+                <h3>${player.username}</h3>
+                <p>Full website snapshot with wallet, level progress, and the latest results from the floor.</p>
+                <div class="profile-modal-badges">
+                    <span class="profile-modal-badge">Level ${player.level || 1}</span>
+                    <span class="profile-modal-badge">${player.winRate || 0}% win rate</span>
+                    <span class="profile-modal-badge">${player.totalBets || 0} bets</span>
+                </div>
+                <div class="profile-modal-actions">
+                    ${isSelf
+                        ? '<button class="btn-primary" type="button" data-profile-action="self-profile">Open My Profile</button>'
+                        : '<button class="btn-primary" type="button" data-profile-action="mention">Mention In Chat</button>'}
+                    ${isSelf
+                        ? '<button class="btn-secondary" type="button" data-profile-action="close-modal">Close</button>'
+                        : '<button class="btn-secondary" type="button" data-profile-action="tip">Tip Player</button>'}
+                </div>
+            </div>
+        </div>
+
+        <div class="profile-modal-grid">
+            <div class="profile-modal-stat-card">
+                <span>Website Wallet</span>
+                <strong>$${formatAmount(player.walletBalance || 0)}</strong>
+            </div>
+            <div class="profile-modal-stat-card">
+                <span>Minecraft Balance</span>
+                <strong>$${formatAmount(player.vaultBalance || 0)}</strong>
+            </div>
+            <div class="profile-modal-stat-card">
+                <span>Total Profit</span>
+                <strong>${totalProfit >= 0 ? '+' : '-'}$${formatAmount(Math.abs(totalProfit))}</strong>
+            </div>
+            <div class="profile-modal-stat-card">
+                <span>Biggest Hit</span>
+                <strong>$${formatAmount(player.biggestWin || 0)}</strong>
+            </div>
+            <div class="profile-modal-stat-card">
+                <span>Total Wagered</span>
+                <strong>$${formatAmount(player.totalWagered || 0)}</strong>
+            </div>
+            <div class="profile-modal-stat-card">
+                <span>Biggest Loss</span>
+                <strong>$${formatAmount(player.biggestLoss || 0)}</strong>
+            </div>
+        </div>
+
+        <div class="profile-modal-results">
+            <div class="home-section-head">
+                <span class="banner-tag">Recent Results</span>
+                <h3>Latest website action</h3>
+            </div>
+            <div class="profile-modal-results-list">
+                ${renderRecentProfileResults(player.recentBets)}
+            </div>
+        </div>
+    `;
+
+    container.querySelectorAll('[data-profile-action]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const action = button.dataset.profileAction;
+            if (action === 'close-modal') {
+                closePlayerProfileModal();
+                return;
+            }
+
+            if (action === 'self-profile') {
+                closePlayerProfileModal();
+                setActiveGame('profile');
+                return;
+            }
+
+            if (action === 'mention') {
+                closePlayerProfileModal();
+                primeChatInput(`@${player.username} `, true);
+                return;
+            }
+
+            if (action === 'tip') {
+                closePlayerProfileModal();
+                openTipModal(player.username);
+            }
+        });
+    });
+
+    setupImageFallbacks(container);
+}
+
+async function openPlayerProfileModal(username) {
+    if (!username) {
+        return;
+    }
+
+    if (currentPlayer?.username && username.toLowerCase() === currentPlayer.username.toLowerCase()) {
+        setActiveGame('profile');
+        return;
+    }
+
+    const modal = document.getElementById('playerProfileModal');
+    if (!modal) {
+        return;
+    }
+
+    activePlayerProfileUsername = username;
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    renderPlayerProfileModalContent(null, { loading: true });
+
+    const cachedProfile = playerProfileCache.get(username.toLowerCase());
+    if (cachedProfile) {
+        renderPlayerProfileModalContent(cachedProfile);
+    }
+
+    try {
+        const response = await fetch(buildPlayerProfileApiUrl(username));
+        const data = await response.json();
+
+        if (!data.success || !data.player) {
+            throw new Error(data.message || 'Could not load player profile');
+        }
+
+        playerProfileCache.set(username.toLowerCase(), data.player);
+
+        if (activePlayerProfileUsername === username) {
+            renderPlayerProfileModalContent(data.player);
+        }
+    } catch (error) {
+        console.error('Player profile load error:', error);
+        if (activePlayerProfileUsername === username) {
+            renderPlayerProfileModalContent(null, { error: error.message || 'Could not load player profile' });
+        }
+    }
+}
+
+function closePlayerProfileModal() {
+    const modal = document.getElementById('playerProfileModal');
+    if (!modal) {
+        return;
+    }
+
+    activePlayerProfileUsername = '';
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function setupPlayerProfileModal() {
+    const modal = document.getElementById('playerProfileModal');
+    const closeButton = document.getElementById('playerProfileClose');
+    if (!modal || !closeButton) {
+        return;
+    }
+
+    closeButton.addEventListener('click', closePlayerProfileModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closePlayerProfileModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('active')) {
+            closePlayerProfileModal();
+        }
+    });
 }
 
 function normalizeProvablyFairState(state = {}) {
@@ -1231,6 +1661,8 @@ function buildChatMessageElement(entry, animate = true) {
     const user = document.createElement('strong');
     user.className = 'chat-message-user';
     user.textContent = entry.username;
+    user.setAttribute('role', 'button');
+    user.tabIndex = 0;
     heading.appendChild(user);
 
     if (entry.username === currentPlayer?.username) {
@@ -1271,6 +1703,23 @@ function buildChatMessageElement(entry, animate = true) {
     const text = document.createElement('p');
     text.className = `chat-message-text${entry.source === 'tip' ? ' is-tip' : ''}`;
     text.textContent = entry.message;
+
+    const openProfile = () => {
+        playUiSound('modal-open');
+        openPlayerProfileModal(entry.username);
+    };
+    [avatar, user].forEach((element) => {
+        element.classList.add('profile-launch');
+        element.tabIndex = 0;
+        element.setAttribute('role', 'button');
+        element.addEventListener('click', openProfile);
+        element.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openProfile();
+            }
+        });
+    });
 
     top.append(heading, time, actions);
     body.append(top, text);
@@ -1631,6 +2080,14 @@ function toggleOnlinePresenceCard(forceOpen = null) {
 }
 
 function setupInteractiveShell() {
+    const homeButton = document.getElementById('topHomeButton');
+    if (homeButton) {
+        homeButton.addEventListener('click', () => {
+            playUiSound('toggle-on');
+            setActiveGame('main');
+        });
+    }
+
     const openProfile = () => {
         playUiSound('modal-open');
         setActiveGame('profile');
@@ -2290,6 +2747,7 @@ function showMainScreen() {
     loadDashboardStats();
     loadRecentBets();
     loadProvablyFairState();
+    refreshPlayerSpotlight(true);
 
     resetSocketConnection();
     connectSocket();
@@ -2349,7 +2807,7 @@ function updatePlayerInfo() {
         profileXpFill.style.width = `${Math.round((currentPlayer.levelProgress || 0) * 100)}%`;
     }
 
-    const skinUrl = `https://mc-heads.net/avatar/${currentPlayer.username}/48`;
+    const skinUrl = createChatAvatarUrl(currentPlayer.username);
     const avatar = document.getElementById('userSkin');
     avatar.dataset.avatarName = currentPlayer.username;
     avatar.dataset.fallbackApplied = 'false';
@@ -2366,6 +2824,7 @@ function updatePlayerInfo() {
 
     refreshLiveChatAvailability();
     refreshWalletTransferAvailability();
+    updateHomePreviewStats();
 }
 
 function renderModeStrip() {
@@ -2564,37 +3023,85 @@ function loadMainGame(container) {
         `;
     }).join('');
 
+    const hotGameMeta = getHomeHotGameMeta();
+    const latestSlip = Array.isArray(cachedRecentBets) && cachedRecentBets.length > 0 ? cachedRecentBets[0] : null;
+
     container.innerHTML = `
         <div class="home-shell">
-            <section class="home-welcome-band">
+            <section class="home-command-band">
                 <div class="home-welcome-copy">
-                    <span class="banner-tag">Welcome Back</span>
-                    <h3>${currentPlayer.username}, pick your next table.</h3>
-                    <p>Deal or No Deal is pushed to the front, the wallet stays clean in the top bar, and the whole floor scales properly on smaller screens now.</p>
+                    <span class="banner-tag">Lobby Overview</span>
+                    <h3>${currentPlayer.username}, your whole floor is live.</h3>
+                    <p>Chat stays locked to the left, global wins and losses stay on the right, and this home screen previews the main action room before you jump into a table.</p>
                     <div class="home-welcome-actions">
                         <button class="btn-primary" type="button" data-home-game="dealnodeal">Play Deal or No Deal</button>
-                        <button class="btn-secondary" type="button" data-home-game="profile">Open Profile</button>
+                        <button class="btn-secondary" type="button" data-home-game="crash">Open Crash Arena</button>
                     </div>
                 </div>
-                <div class="home-balance-rack">
+                <div class="home-balance-rack home-preview-rack">
                     <div class="home-balance-tile">
                         <span>Website Balance</span>
                         <strong id="homeBalanceValue">$${formatAmount(currentPlayer.balance)}</strong>
+                        <small>Ready for every website-only wager</small>
                     </div>
                     <div class="home-balance-tile">
                         <span>Minecraft Balance</span>
                         <strong id="homeVaultValue">$${formatAmount(currentPlayer.vaultBalance)}</strong>
+                        <small>Vault money waiting for deposits</small>
                     </div>
                     <div class="home-balance-tile">
                         <span>Players Online</span>
                         <strong id="homeOnlineValue">${globalRealtimeStats?.onlinePlayers || 0}</strong>
+                        <small>Website sessions active right now</small>
+                    </div>
+                    <div class="home-balance-tile">
+                        <span>Win Rate</span>
+                        <strong id="homeWinRateValue">0%</strong>
+                        <small>Global website result ratio</small>
+                    </div>
+                </div>
+            </section>
+
+            <section class="home-section home-preview-section">
+                <div class="home-section-head">
+                    <span class="banner-tag">Preview Main UI</span>
+                    <h3>Main room pulse before you swap games</h3>
+                </div>
+                <div class="home-main-preview-grid">
+                    <button class="home-preview-panel home-preview-panel-callout" type="button" data-home-game="dealnodeal">
+                        <span class="home-game-kicker">Featured Table</span>
+                        <strong>${featuredMeta.title}</strong>
+                        <p>${featuredMeta.description}</p>
+                        <span class="home-preview-link">Open table</span>
+                    </button>
+                    <div class="home-preview-stack">
+                        <div class="home-preview-panel">
+                            <span class="home-game-kicker">Action Radar</span>
+                            <strong id="homeVolumeValue">$${formatAmount(globalRealtimeStats?.totalWagered || 0)}</strong>
+                            <p>Total live volume pushed through the website floor.</p>
+                            <small id="homeHotGameMeta">${hotGameMeta.chip}</small>
+                        </div>
+                        <div class="home-preview-panel">
+                            <span class="home-game-kicker">Net Flow</span>
+                            <strong id="homeNetValue">+$${formatAmount(Math.abs(globalRealtimeStats?.netProfit || 0))}</strong>
+                            <p id="homeLatestSlipValue">${latestSlip ? `${latestSlip.username} just moved the board.` : 'Waiting for the next ticket to land.'}</p>
+                            <small id="homeLatestSlipMeta">${latestSlip ? `${getGameMeta(latestSlip.gameType || 'dealnodeal').title} • ${formatTimeLabel(latestSlip.timestamp)}` : 'Live slips update here'}</small>
+                        </div>
                     </div>
                 </div>
             </section>
 
             <section class="home-section">
                 <div class="home-section-head">
-                    <span class="banner-tag">Featured</span>
+                    <span class="banner-tag">Player Intel</span>
+                    <h3>Clickable full-skin profiles</h3>
+                </div>
+                <div id="homeProfilesGrid" class="player-spotlight-grid"></div>
+            </section>
+
+            <section class="home-section">
+                <div class="home-section-head">
+                    <span class="banner-tag">Featured Games</span>
                     <h3>Big update picks</h3>
                 </div>
                 <div class="home-featured-grid">${featuredGames}</div>
@@ -2613,6 +3120,10 @@ function loadMainGame(container) {
     container.querySelectorAll('[data-home-game]').forEach((button) => {
         button.addEventListener('click', () => setActiveGame(button.dataset.homeGame));
     });
+
+    updateHomePreviewStats();
+    renderHomePlayerSpotlight();
+    refreshPlayerSpotlight();
 }
 
 function loadProfileGame(container) {
@@ -2625,7 +3136,7 @@ function loadProfileGame(container) {
         <div class="profile-shell">
             <section class="profile-hero-panel">
                 <div class="profile-avatar-wrap">
-                    <img src="${createChatAvatarUrl(currentPlayer.username)}" alt="${currentPlayer.username} skin" data-avatar-name="${currentPlayer.username}" data-avatar-size="96">
+                    <img src="${createPlayerSkinRenderUrl(currentPlayer.username, 160)}" alt="${currentPlayer.username} skin" data-avatar-name="${currentPlayer.username}" data-avatar-size="160">
                 </div>
                 <div class="profile-hero-copy">
                     <span class="banner-tag">BingungSMP Gamble</span>
@@ -2824,6 +3335,11 @@ function updateGameChrome(game) {
     document.querySelectorAll('[data-menu-game]').forEach((item) => {
         item.classList.toggle('active', item.dataset.menuGame === game);
     });
+
+    const homeButton = document.getElementById('topHomeButton');
+    if (homeButton) {
+        homeButton.classList.toggle('active', game === 'main');
+    }
 }
 
 function loadGame(game) {
@@ -2984,6 +3500,7 @@ function updateStatsDisplay(stats) {
     const statBiggestLoss = document.getElementById('statBiggestLoss');
     const statTotalProfit = document.getElementById('statTotalProfit');
     const statTotalLost = document.getElementById('statTotalLost');
+    const profileSpotlightProfit = document.getElementById('profileSpotlightProfit');
 
     if (statWagered) statWagered.textContent = '$' + formatAmount(stats.totalWagered || 0);
     if (statWins) statWins.textContent = `${stats.wins || 0}`;
@@ -2991,6 +3508,7 @@ function updateStatsDisplay(stats) {
     if (statBiggestLoss) statBiggestLoss.textContent = '$' + formatAmount(stats.biggestLoss || 0);
     if (statTotalProfit) statTotalProfit.textContent = '$' + formatAmount(stats.totalProfit || 0);
     if (statTotalLost) statTotalLost.textContent = '$' + formatAmount(stats.totalLost || 0);
+    if (profileSpotlightProfit) profileSpotlightProfit.textContent = '$' + formatAmount(stats.totalProfit || 0);
 }
 
 async function loadRecentBets() {
@@ -3052,6 +3570,7 @@ function updateBetFeedInsight(bets = cachedRecentBets) {
         if (info) {
             info.textContent = 'Latest global slips';
         }
+        updateHomePreviewStats();
         return;
     }
 
@@ -3079,6 +3598,14 @@ function updateBetFeedInsight(bets = cachedRecentBets) {
     if (info) {
         info.textContent = `${recentBetsExpanded ? '1h window' : 'latest window'} • ${filterCopy}`;
     }
+
+    if (info) {
+        info.textContent = `${recentBetsExpanded ? '1h window' : 'latest window'} • ${filterCopy}`;
+    }
+    if (info) {
+        info.textContent = (recentBetsExpanded ? '1h window' : 'latest window') + ' - ' + filterCopy;
+    }
+    updateHomePreviewStats();
 }
 
 function renderRecentBetsList(options = {}) {
@@ -3127,6 +3654,8 @@ function buildLiveBetElement(bet, animate = true) {
     const playerWrap = document.createElement('div');
     playerWrap.className = 'live-bet-player';
     playerWrap.title = hoverLabel;
+    playerWrap.setAttribute('role', 'button');
+    playerWrap.tabIndex = 0;
 
     const avatar = document.createElement('img');
     avatar.className = 'live-bet-avatar';
@@ -3167,7 +3696,35 @@ function buildLiveBetElement(bet, animate = true) {
         </div>
     `;
 
+    const openProfile = () => {
+        playUiSound('modal-open');
+        openPlayerProfileModal(bet.username);
+    };
+    playerWrap.classList.add('profile-launch');
+    playerWrap.addEventListener('click', openProfile);
+    playerWrap.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openProfile();
+        }
+    });
+
     betItem.append(playerWrap, content);
+
+    const liveBetUser = content.querySelector('.live-bet-user');
+    if (liveBetUser) {
+        liveBetUser.classList.add('profile-launch');
+        liveBetUser.setAttribute('role', 'button');
+        liveBetUser.tabIndex = 0;
+        liveBetUser.addEventListener('click', openProfile);
+        liveBetUser.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openProfile();
+            }
+        });
+    }
+
     return betItem;
 }
 

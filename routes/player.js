@@ -42,6 +42,21 @@ function buildPlayerPayload(player = {}, betStats = {}) {
     };
 }
 
+function buildPublicProfilePayload(player = {}, betStats = {}, options = {}) {
+    const payload = buildPlayerPayload(player, betStats);
+    const totalBets = Number(payload.totalBets || 0);
+    const wins = Number(payload.wins || 0);
+
+    return {
+        ...payload,
+        totalBets,
+        wins,
+        losses: Math.max(0, totalBets - wins),
+        winRate: totalBets > 0 ? Math.round((wins / totalBets) * 100) : 0,
+        online: !!options.online
+    };
+}
+
 function sanitizeTransferType(value) {
     const safeType = String(value || '').trim().toLowerCase();
     return TRANSFER_TYPES.has(safeType) ? safeType : '';
@@ -189,6 +204,36 @@ async function getPlayerWithBetStats(username) {
     };
 }
 
+async function getPublicPlayerProfile(username, options = {}) {
+    const result = await getPlayerWithBetStats(username);
+
+    if (!result) {
+        return null;
+    }
+
+    const [recentBets] = await db.query(
+        `SELECT game_type, bet_amount, multiplier, payout, profit, won, created_at
+         FROM bets
+         WHERE username = ?
+         ORDER BY created_at DESC
+         LIMIT 6`,
+        [username]
+    );
+
+    return {
+        ...buildPublicProfilePayload(result.player, result.betStats, options),
+        recentBets: recentBets.map((bet) => ({
+            gameType: bet.game_type || 'casino',
+            amount: Number(bet.bet_amount || 0),
+            multiplier: Number(bet.multiplier || 0),
+            payout: Number(bet.payout || 0),
+            profit: Number(bet.profit || 0),
+            won: !!bet.won,
+            timestamp: bet.created_at
+        }))
+    };
+}
+
 // Get player stats
 router.get('/stats', requireAuth, async (req, res) => {
     const username = req.session.username;
@@ -207,6 +252,108 @@ router.get('/stats', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Stats error:', error);
         return res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.get('/directory', requireAuth, async (req, res) => {
+    const limit = Math.max(1, Math.min(12, parseInt(req.query.limit, 10) || 6));
+    const requestedUsernames = String(req.query.usernames || '')
+        .split(',')
+        .map((value) => String(value || '').trim().replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16))
+        .filter(Boolean);
+    const uniqueRequested = [...new Set(requestedUsernames)];
+    const onlineSet = new Set(uniqueRequested.map((value) => value.toLowerCase()));
+
+    try {
+        let playerRows = [];
+
+        if (uniqueRequested.length > 0) {
+            [playerRows] = await db.query(
+                `SELECT
+                    p.username,
+                    p.balance,
+                    p.wallet_balance,
+                    p.xp,
+                    p.level,
+                    p.total_wagered,
+                    COALESCE(COUNT(b.id), 0) AS total_bets,
+                    COALESCE(SUM(CASE WHEN b.won = TRUE THEN 1 ELSE 0 END), 0) AS wins,
+                    COALESCE(MAX(b.profit), 0) AS biggest_win,
+                    COALESCE(MIN(b.profit), 0) AS biggest_loss,
+                    COALESCE(SUM(CASE WHEN b.profit > 0 THEN b.profit ELSE 0 END), 0) AS total_profit,
+                    COALESCE(SUM(CASE WHEN b.profit < 0 THEN ABS(b.profit) ELSE 0 END), 0) AS total_lost
+                 FROM players p
+                 LEFT JOIN bets b ON b.username = p.username
+                 WHERE p.username IN (?)
+                 GROUP BY p.username, p.balance, p.wallet_balance, p.xp, p.level, p.total_wagered`,
+                [uniqueRequested]
+            );
+        } else {
+            [playerRows] = await db.query(
+                `SELECT
+                    p.username,
+                    p.balance,
+                    p.wallet_balance,
+                    p.xp,
+                    p.level,
+                    p.total_wagered,
+                    COALESCE(COUNT(b.id), 0) AS total_bets,
+                    COALESCE(SUM(CASE WHEN b.won = TRUE THEN 1 ELSE 0 END), 0) AS wins,
+                    COALESCE(MAX(b.profit), 0) AS biggest_win,
+                    COALESCE(MIN(b.profit), 0) AS biggest_loss,
+                    COALESCE(SUM(CASE WHEN b.profit > 0 THEN b.profit ELSE 0 END), 0) AS total_profit,
+                    COALESCE(SUM(CASE WHEN b.profit < 0 THEN ABS(b.profit) ELSE 0 END), 0) AS total_lost
+                 FROM players p
+                 LEFT JOIN bets b ON b.username = p.username
+                 GROUP BY p.username, p.balance, p.wallet_balance, p.xp, p.level, p.total_wagered
+                 ORDER BY p.wallet_balance DESC, p.total_wagered DESC, p.username ASC
+                 LIMIT ?`,
+                [limit]
+            );
+        }
+
+        const sortedRows = uniqueRequested.length > 0
+            ? playerRows.sort((left, right) => uniqueRequested.indexOf(left.username) - uniqueRequested.indexOf(right.username))
+            : playerRows;
+
+        return res.json({
+            success: true,
+            players: sortedRows
+                .slice(0, limit)
+                .map((player) => buildPublicProfilePayload(player, player, {
+                    online: onlineSet.has(String(player.username || '').toLowerCase())
+                }))
+        });
+    } catch (error) {
+        console.error('Player directory error:', error);
+        return res.status(500).json({ success: false, message: 'Could not load player directory' });
+    }
+});
+
+router.get('/profile/:username', requireAuth, async (req, res) => {
+    const username = String(req.params.username || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9_]/g, '')
+        .slice(0, 16);
+
+    if (!username) {
+        return res.status(400).json({ success: false, message: 'Player username is required' });
+    }
+
+    try {
+        const playerProfile = await getPublicPlayerProfile(username);
+
+        if (!playerProfile) {
+            return res.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        return res.json({
+            success: true,
+            player: playerProfile
+        });
+    } catch (error) {
+        console.error('Public profile error:', error);
+        return res.status(500).json({ success: false, message: 'Could not load that player profile' });
     }
 });
 

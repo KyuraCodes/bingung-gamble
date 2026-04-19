@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Oxanium:wght@500;600;700;800&display=swap');
 
 :root {
     --bg-primary: #090d10;
@@ -7318,5 +7318,1005 @@ textarea,
 
     .chat-message {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Final layout and theme refit */
+:root {
+    --font-display: 'Oxanium', sans-serif;
+    --font-body: 'Manrope', sans-serif;
+    --bg-primary: #03111d;
+    --bg-secondary: #071a2b;
+    --bg-tertiary: #0d2740;
+    --panel-raised: rgba(8, 28, 47, 0.86);
+    --line-soft: rgba(120, 216, 255, 0.14);
+    --line-strong: rgba(152, 255, 72, 0.34);
+    --border-color: rgba(73, 173, 255, 0.24);
+    --accent-primary: #8aff38;
+    --accent-secondary: #2fe3ff;
+    --accent-success: #8aff38;
+    --accent-danger: #ff6b8e;
+    --accent-warning: #d6ff45;
+    --accent-cyan: #67efff;
+    --accent-blue: #37adff;
+    --accent-ink: #03111d;
+    --text-primary: #f3fbff;
+    --text-secondary: #9dc2de;
+    --text-muted: #5d7c99;
+    --glow-primary: rgba(138, 255, 56, 0.22);
+    --glow-secondary: rgba(47, 227, 255, 0.22);
+    --shadow-soft: 0 30px 70px rgba(1, 8, 18, 0.5);
+    --shadow-tight: 0 22px 44px rgba(1, 8, 18, 0.42);
+}
+
+body {
+    background:
+        radial-gradient(circle at 12% 12%, rgba(55, 173, 255, 0.22), transparent 22%),
+        radial-gradient(circle at 82% 14%, rgba(138, 255, 56, 0.14), transparent 24%),
+        radial-gradient(circle at 50% 100%, rgba(47, 227, 255, 0.12), transparent 28%),
+        linear-gradient(135deg, #010912 0%, #04111d 38%, #071a2b 100%);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+
+body::before {
+    background:
+        linear-gradient(90deg, rgba(60, 148, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(60, 148, 255, 0.04) 1px, transparent 1px);
+    background-size: 120px 120px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.86), transparent 96%);
+}
+
+body::after {
+    background:
+        linear-gradient(120deg, transparent 0%, rgba(47, 227, 255, 0.1) 32%, transparent 64%),
+        linear-gradient(320deg, transparent 0%, rgba(138, 255, 56, 0.08) 24%, transparent 62%);
+    opacity: 0.9;
+}
+
+body,
+button,
+input,
+select,
+textarea,
+.live-sidebar,
+.game-stage,
+.feed-block,
+.feed-block-header,
+.home-shell,
+.deal-nodeal-game,
+.crash-game,
+.profile-modal-card {
+    font-family: var(--font-body);
+}
+
+.story-title,
+.brand-mark,
+.sidebar-title,
+.topbar-title-row h2,
+.games-menu-copy strong,
+.home-section-head h3,
+.home-balance-tile strong,
+.home-game-card strong,
+.home-preview-panel strong,
+.player-spotlight-head strong,
+.profile-modal-copy h3,
+.summary-tile strong,
+.deal-stage-stat strong,
+.deal-value-pill strong,
+.deal-case-number,
+.deal-player-case strong {
+    font-family: var(--font-display);
+}
+
+#mainScreen .sidebar,
+#sidebarToggle {
+    display: none !important;
+}
+
+#floorPulseCard {
+    display: grid !important;
+}
+
+.app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.main-content {
+    gap: 22px;
+    padding: 22px;
+}
+
+.topbar,
+.game-stage,
+.live-sidebar,
+.home-command-band,
+.home-section,
+.feed-block,
+.chat-panel,
+.floor-pulse-card,
+.summary-tile,
+.deal-hero,
+.deal-math-card,
+.deal-offer-card,
+.deal-result-card,
+.deal-actions,
+.deal-stage-shell,
+.profile-modal-card {
+    background:
+        linear-gradient(180deg, rgba(7, 24, 40, 0.96), rgba(3, 12, 22, 0.98)),
+        radial-gradient(circle at top right, rgba(55, 173, 255, 0.18), transparent 44%),
+        linear-gradient(135deg, rgba(138, 255, 56, 0.08), transparent 54%) !important;
+    border: 1px solid rgba(84, 178, 255, 0.18) !important;
+    border-radius: 28px !important;
+    box-shadow: var(--shadow-soft) !important;
+    overflow: hidden;
+    position: relative;
+}
+
+.topbar::before,
+.game-stage::before,
+.live-sidebar::before,
+.home-command-band::before,
+.home-section::before,
+.profile-modal-card::before {
+    background: linear-gradient(90deg, rgba(55, 173, 255, 0), rgba(55, 173, 255, 0.46), rgba(138, 255, 56, 0.3), rgba(55, 173, 255, 0));
+    content: '';
+    height: 1px;
+    left: 22px;
+    opacity: 0.9;
+    position: absolute;
+    right: 22px;
+    top: 0;
+}
+
+.topbar {
+    align-items: start;
+    display: grid !important;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    overflow: visible;
+    padding: 22px 24px;
+}
+
+.topbar-copy,
+.topbar-actions,
+.topbar-balance-chip,
+.game-stage,
+.feed-sidebar,
+.chat-sidebar,
+.deal-stage,
+.deal-sidebar,
+.home-section,
+.home-featured-grid,
+.home-games-grid,
+.deal-show-board,
+.deal-board-core,
+.deal-case-grid,
+.deal-value-column,
+.crash-shell,
+.crash-stage-panel,
+.crash-bet-panel {
+    min-width: 0;
+}
+
+.topbar-utility-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.top-shell-switches {
+    display: flex;
+    gap: 10px;
+}
+
+.top-section-button,
+.games-menu-button {
+    align-items: center;
+    background:
+        linear-gradient(180deg, rgba(10, 25, 40, 0.96), rgba(4, 12, 20, 0.98)),
+        linear-gradient(135deg, rgba(55, 173, 255, 0.18), transparent 62%);
+    border: 1px solid rgba(73, 173, 255, 0.24);
+    border-radius: 16px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 10px;
+    min-height: 48px;
+    padding: 0 18px;
+    text-transform: uppercase;
+}
+
+.top-section-button:hover,
+.top-section-button:focus-visible,
+.top-section-button.active,
+.games-menu-button:hover,
+.games-menu-button:focus-visible,
+.games-menu-button.is-open {
+    border-color: rgba(138, 255, 56, 0.42);
+    box-shadow: 0 0 0 1px rgba(138, 255, 56, 0.16), 0 18px 36px rgba(2, 8, 23, 0.26);
+    transform: translateY(-1px);
+}
+
+.top-section-button i,
+.games-menu-button i,
+.nav-item i,
+.games-menu-icon i,
+.home-game-footer i {
+    color: var(--accent-secondary);
+}
+
+.games-menu-panel {
+    z-index: 120;
+}
+
+.topbar-title-row h2 {
+    font-size: clamp(2.2rem, 2.4vw, 3rem);
+    letter-spacing: 0.03em;
+}
+
+.topbar-eyebrow,
+.mode-chip,
+.live-status,
+.nav-label,
+.stage-label,
+.live-label,
+.summary-label,
+.home-game-kicker,
+.wallet-card-label,
+.wallet-transfer-kicker,
+.banner-tag,
+.sportsbook-slip-kicker {
+    letter-spacing: 0.14em;
+}
+
+.topbar-balance-chip,
+.network-pill,
+.user-profile,
+.summary-tile,
+.home-balance-tile,
+.home-preview-panel,
+.player-spotlight-card,
+.profile-modal-stat-card {
+    background:
+        linear-gradient(180deg, rgba(10, 24, 39, 0.94), rgba(5, 14, 24, 0.98)),
+        linear-gradient(135deg, rgba(55, 173, 255, 0.16), transparent 64%);
+    border: 1px solid rgba(84, 178, 255, 0.16);
+    box-shadow: inset 0 1px 0 rgba(204, 243, 255, 0.05);
+}
+
+.network-pill,
+.user-profile {
+    border-radius: 22px;
+    padding: 14px 16px;
+}
+
+.topbar-actions {
+    align-items: stretch;
+    display: grid;
+    gap: 12px;
+    grid-auto-flow: column;
+}
+
+.balance-chip-action {
+    color: var(--accent-primary);
+}
+
+.game-wrapper {
+    align-items: start;
+    display: grid;
+    gap: 20px;
+    grid-template-areas: 'chat stage feed';
+    grid-template-columns: minmax(280px, 0.88fr) minmax(0, 1.62fr) minmax(320px, 0.98fr) !important;
+}
+
+.chat-sidebar {
+    grid-area: chat;
+    order: unset !important;
+}
+
+.game-stage {
+    grid-area: stage;
+    order: unset !important;
+    padding: 20px;
+}
+
+.feed-sidebar {
+    grid-area: feed;
+    order: unset !important;
+}
+
+.chat-sidebar.live-sidebar,
+.feed-sidebar.live-sidebar {
+    max-height: calc(100vh - 46px) !important;
+    position: sticky !important;
+    top: 22px !important;
+}
+
+.live-sidebar {
+    display: flex;
+    gap: 16px;
+    padding: 18px;
+}
+
+.live-header {
+    border-bottom-color: rgba(84, 178, 255, 0.12);
+    padding: 2px 2px 16px;
+}
+
+.feed-focus-card,
+.feed-block,
+.chat-panel {
+    border-radius: 24px !important;
+}
+
+.feed-focus-card {
+    display: grid !important;
+    gap: 18px;
+}
+
+.pulse-metrics {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pulse-metric,
+.summary-tile {
+    min-width: 0;
+}
+
+.realtime-summary {
+    gap: 12px;
+}
+
+.feed-block,
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.feed-block-header {
+    border-bottom-color: rgba(84, 178, 255, 0.12);
+    padding: 16px 18px;
+}
+
+.live-chat-messages,
+.live-bets {
+    max-height: min(48vh, 560px) !important;
+    min-height: 260px;
+    padding: 16px;
+}
+
+.chat-message-body,
+.live-bet {
+    background:
+        linear-gradient(180deg, rgba(11, 28, 44, 0.94), rgba(6, 16, 27, 0.98)),
+        linear-gradient(135deg, rgba(55, 173, 255, 0.12), transparent 60%);
+    border: 1px solid rgba(84, 178, 255, 0.12);
+    border-radius: 20px;
+}
+
+.chat-message-user,
+.live-bet-user,
+.profile-launch {
+    cursor: pointer;
+}
+
+.chat-message-user:hover,
+.live-bet-user:hover,
+.profile-launch:hover {
+    color: var(--accent-secondary);
+}
+
+.feed-filter-btn,
+.feed-action-btn,
+.chat-chip,
+.chat-tip-btn {
+    background: rgba(8, 23, 38, 0.82);
+    border: 1px solid rgba(84, 178, 255, 0.16);
+    border-radius: 999px;
+    color: var(--text-primary);
+}
+
+.feed-filter-btn.active,
+.chat-chip:hover,
+.chat-tip-btn:hover,
+.chat-tip-btn.is-ghost {
+    border-color: rgba(138, 255, 56, 0.34);
+    color: var(--text-primary);
+}
+
+.home-shell {
+    display: grid;
+    gap: 20px;
+}
+
+.home-command-band {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.95fr);
+    padding: 22px;
+}
+
+.home-preview-rack {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.home-balance-tile,
+.home-preview-panel {
+    border-radius: 24px;
+    display: grid;
+    gap: 8px;
+    min-height: 128px;
+    padding: 18px;
+}
+
+.home-balance-tile small,
+.home-preview-panel small,
+.player-spotlight-head small,
+.profile-modal-result-row small {
+    color: var(--text-secondary);
+}
+
+.home-preview-section {
+    padding: 22px;
+}
+
+.home-main-preview-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.85fr);
+}
+
+.home-preview-panel-callout {
+    align-content: end;
+    background:
+        linear-gradient(180deg, rgba(12, 33, 52, 0.96), rgba(5, 16, 28, 0.99)),
+        radial-gradient(circle at top right, rgba(138, 255, 56, 0.14), transparent 34%);
+    cursor: pointer;
+    min-height: 100%;
+    text-align: left;
+    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.home-preview-panel-callout:hover,
+.home-preview-panel-callout:focus-visible,
+.player-spotlight-card:hover,
+.player-spotlight-card:focus-visible,
+.home-game-card:hover,
+.home-game-card:focus-visible {
+    border-color: rgba(138, 255, 56, 0.4);
+    box-shadow: 0 22px 40px rgba(2, 8, 23, 0.32);
+    transform: translateY(-3px);
+}
+
+.home-preview-stack {
+    display: grid;
+    gap: 16px;
+}
+
+.home-preview-link {
+    color: var(--accent-primary);
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.home-featured-grid,
+.home-games-grid {
+    gap: 14px;
+}
+
+.home-game-card {
+    border-radius: 24px;
+    min-height: 190px;
+    padding: 18px;
+}
+
+.player-spotlight-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.player-spotlight-grid > .feed-empty-state {
+    grid-column: 1 / -1;
+}
+
+.player-spotlight-card {
+    align-items: center;
+    border-radius: 26px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 108px minmax(0, 1fr);
+    padding: 18px;
+    text-align: left;
+    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.player-spotlight-skin-wrap {
+    align-items: center;
+    background:
+        linear-gradient(180deg, rgba(8, 25, 40, 0.96), rgba(4, 13, 21, 0.98)),
+        radial-gradient(circle at top, rgba(138, 255, 56, 0.12), transparent 44%);
+    border: 1px solid rgba(138, 255, 56, 0.18);
+    border-radius: 24px;
+    display: grid;
+    justify-items: center;
+    min-height: 188px;
+    padding: 16px 10px 12px;
+    position: relative;
+}
+
+.player-spotlight-skin,
+.online-presence-skin,
+.profile-modal-skin img,
+.profile-avatar-wrap img,
+.story-avatar-button img {
+    object-fit: contain;
+    padding: 0;
+}
+
+.player-spotlight-skin {
+    height: 148px;
+    width: 84px;
+}
+
+.player-spotlight-status {
+    background: rgba(8, 21, 36, 0.92);
+    border: 1px solid rgba(84, 178, 255, 0.16);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    text-transform: uppercase;
+}
+
+.player-spotlight-status.is-online {
+    border-color: rgba(138, 255, 56, 0.26);
+    color: var(--accent-primary);
+}
+
+.player-spotlight-copy {
+    display: grid;
+    gap: 12px;
+}
+
+.player-spotlight-head {
+    display: grid;
+    gap: 4px;
+}
+
+.player-spotlight-stats {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.player-spotlight-stats span {
+    background: rgba(5, 18, 31, 0.74);
+    border: 1px solid rgba(84, 178, 255, 0.1);
+    border-radius: 18px;
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+}
+
+.player-spotlight-stats em {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.player-spotlight-stats strong {
+    font-size: 0.95rem;
+}
+
+.online-presence-list {
+    gap: 10px;
+}
+
+.online-presence-item {
+    align-items: center;
+    border-radius: 22px;
+    gap: 14px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    min-height: 102px;
+    padding: 12px 14px;
+}
+
+.online-presence-skin {
+    height: 82px;
+    justify-self: center;
+    width: 48px;
+}
+
+.story-avatar-button {
+    cursor: pointer;
+}
+
+.story-avatar-button img {
+    height: 86px;
+    width: 52px;
+}
+
+.profile-avatar-wrap {
+    align-items: center;
+    display: grid;
+    min-width: 172px;
+    padding: 14px;
+}
+
+.profile-avatar-wrap img {
+    height: 180px;
+    width: 110px;
+}
+
+.profile-modal {
+    align-items: center;
+    background: rgba(1, 7, 14, 0.84);
+    display: none;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 10030;
+}
+
+.profile-modal.active {
+    display: flex;
+}
+
+.profile-modal-card {
+    max-height: min(92vh, 960px);
+    max-width: 1040px;
+    overflow: auto;
+    padding: 26px;
+    width: min(1040px, 96vw);
+}
+
+.profile-modal-content {
+    display: grid;
+    gap: 20px;
+    min-height: 240px;
+}
+
+.profile-modal-loading {
+    align-content: center;
+    display: grid;
+    gap: 10px;
+    min-height: 260px;
+    text-align: center;
+}
+
+.profile-modal-hero {
+    align-items: center;
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.profile-modal-skin {
+    align-items: center;
+    background:
+        linear-gradient(180deg, rgba(10, 29, 46, 0.96), rgba(4, 13, 22, 0.98)),
+        radial-gradient(circle at top, rgba(138, 255, 56, 0.16), transparent 38%);
+    border: 1px solid rgba(138, 255, 56, 0.16);
+    border-radius: 28px;
+    display: grid;
+    min-height: 280px;
+    place-items: center;
+    padding: 18px 14px;
+}
+
+.profile-modal-skin img {
+    height: 236px;
+    width: 138px;
+}
+
+.profile-modal-copy {
+    display: grid;
+    gap: 12px;
+}
+
+.profile-modal-badges,
+.profile-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.profile-modal-badge {
+    background: rgba(5, 18, 31, 0.74);
+    border: 1px solid rgba(84, 178, 255, 0.14);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 800;
+    padding: 8px 12px;
+}
+
+.profile-modal-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-modal-stat-card {
+    border-radius: 22px;
+    display: grid;
+    gap: 8px;
+    min-height: 110px;
+    padding: 16px;
+}
+
+.profile-modal-stat-card span {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.profile-modal-stat-card strong {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+}
+
+.profile-modal-results {
+    display: grid;
+    gap: 14px;
+}
+
+.profile-modal-results-list {
+    display: grid;
+    gap: 12px;
+}
+
+.profile-modal-result-row {
+    align-items: center;
+    background:
+        linear-gradient(180deg, rgba(9, 25, 40, 0.94), rgba(4, 14, 24, 0.98)),
+        linear-gradient(135deg, rgba(55, 173, 255, 0.12), transparent 64%);
+    border: 1px solid rgba(84, 178, 255, 0.12);
+    border-radius: 20px;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1.2fr) auto auto;
+    padding: 14px 16px;
+}
+
+.profile-modal-result-row.is-win {
+    border-color: rgba(138, 255, 56, 0.22);
+}
+
+.profile-modal-result-row.is-loss {
+    border-color: rgba(255, 107, 142, 0.18);
+}
+
+.profile-modal-result-row > div {
+    display: grid;
+    gap: 4px;
+}
+
+.profile-modal-empty {
+    color: var(--text-secondary);
+    padding: 10px 0 0;
+}
+
+.deal-nodeal-layout {
+    align-items: start;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1.62fr) minmax(340px, 0.82fr) !important;
+}
+
+.deal-stage-head {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+}
+
+.deal-stage-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deal-show-board {
+    align-items: start;
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 132px minmax(0, 1fr) 132px !important;
+}
+
+.deal-value-column-left,
+.deal-value-column-right {
+    display: grid;
+    gap: 10px;
+}
+
+.deal-value-column-right .deal-value-pill {
+    text-align: right;
+}
+
+.deal-value-pill {
+    align-content: center;
+    min-height: 82px;
+}
+
+.deal-board-core {
+    display: grid;
+    gap: 14px;
+}
+
+.deal-player-case {
+    background:
+        linear-gradient(180deg, rgba(8, 27, 46, 0.98), rgba(5, 14, 24, 0.99)),
+        radial-gradient(circle at top right, rgba(138, 255, 56, 0.14), transparent 44%);
+    border-radius: 24px;
+    padding: 18px;
+}
+
+.deal-case-grid {
+    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.deal-case {
+    border-radius: 22px;
+    min-height: 128px;
+    padding: 14px;
+}
+
+.deal-case.is-chosen {
+    border-color: rgba(138, 255, 56, 0.42);
+}
+
+.deal-case.is-opened {
+    border-color: rgba(55, 173, 255, 0.34);
+}
+
+.quick-wallet-panel {
+    border-radius: 28px;
+}
+
+@media (max-width: 1480px) {
+    .topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar-balance-chip,
+    .topbar-actions {
+        width: 100%;
+    }
+
+    .game-wrapper {
+        grid-template-areas:
+            'stage stage'
+            'chat feed';
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .chat-sidebar.live-sidebar,
+    .feed-sidebar.live-sidebar {
+        max-height: none !important;
+        position: static !important;
+        top: auto !important;
+    }
+
+    .home-command-band,
+    .home-main-preview-grid,
+    .deal-nodeal-layout,
+    .deal-stage-head,
+    .profile-modal-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .player-spotlight-grid,
+    .home-featured-grid,
+    .home-games-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1120px) {
+    .deal-show-board {
+        grid-template-columns: 1fr !important;
+    }
+
+    .deal-value-column-left,
+    .deal-value-column-right {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .profile-modal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 920px) {
+    .main-content {
+        padding: 16px;
+    }
+
+    .game-wrapper {
+        grid-template-areas:
+            'stage'
+            'chat'
+            'feed';
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .topbar-actions,
+    .home-preview-rack,
+    .player-spotlight-grid,
+    .profile-modal-grid,
+    .player-spotlight-stats,
+    .deal-case-grid,
+    .deal-value-column-left,
+    .deal-value-column-right {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .profile-modal-result-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 680px) {
+    .topbar,
+    .game-stage,
+    .live-sidebar,
+    .home-command-band,
+    .home-section,
+    .profile-modal-card {
+        border-radius: 24px !important;
+    }
+
+    .topbar-actions,
+    .home-preview-rack,
+    .home-featured-grid,
+    .home-games-grid,
+    .player-spotlight-grid,
+    .profile-modal-grid,
+    .player-spotlight-stats,
+    .deal-case-grid,
+    .deal-value-column-left,
+    .deal-value-column-right {
+        grid-template-columns: 1fr;
+    }
+
+    .player-spotlight-card,
+    .profile-modal-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .player-spotlight-skin-wrap,
+    .profile-modal-skin {
+        min-height: 220px;
+    }
+
+    .live-chat-messages,
+    .live-bets {
+        max-height: none !important;
+        min-height: 0;
+    }
+
+    .online-presence-item {
+        grid-template-columns: 1fr;
+        justify-items: start;
     }
 }
