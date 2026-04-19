@@ -13,6 +13,7 @@ let recentBetsExpanded = false;
 let recentBetsFilter = 'all';
 let cachedRecentBets = [];
 let pendingTipRecipient = '';
+let currentOnlinePlayers = [];
 
 const responsiveGridRegistry = new Set();
 
@@ -35,13 +36,32 @@ const GAME_META = {
         description: 'Ride the multiplier, bank in time, and keep the streak alive.',
         icon: 'fa-rocket'
     },
-    sports: {
-        title: 'Sports',
-        eyebrow: 'Bot Board',
-        chip: 'Sim Slip',
-        stage: 'Sports Sim Lounge',
-        description: 'Pick a side in bot-run basketball, soccer, tennis, and esports sims with server-resolved results.',
-        icon: 'fa-trophy'
+    chickenroad: {
+        title: 'Chicken Crossing',
+        eyebrow: 'Road Rush',
+        chip: 'Cross Or Bust',
+        stage: 'Neon Crosswalk',
+        description: 'Pick how many lanes the chicken should clear, then pray the traffic leaves an opening.',
+        icon: 'fa-drumstick-bite',
+        badge: 'NEW'
+    },
+    safecracker: {
+        title: 'Safecracker',
+        eyebrow: 'Vault Dial',
+        chip: 'Lock Pressure',
+        stage: 'Crack Station',
+        description: 'Choose a heist plan, spin the dials, and hope every tumbler lands in the green.',
+        icon: 'fa-key',
+        badge: 'NEW'
+    },
+    wirecut: {
+        title: 'Wire Cut',
+        eyebrow: 'Bomb Table',
+        chip: 'One Cut',
+        stage: 'Defuse Bench',
+        description: 'Pick a wire plan, cut at the right time, and get paid if the device stays quiet.',
+        icon: 'fa-bomb',
+        badge: 'NEW'
     },
     dealnodeal: {
         title: 'Deal or No Deal',
@@ -213,8 +233,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRecentBetsToggle();
     setupBetFeedFilters();
     setupChatQuickReplies();
+    setupInteractiveShell();
+    setupDashboardActions();
     renderModeStrip();
     renderQuickSwitch();
+    setupGameContentEnhancer();
     setupProvablyFairPanel();
     renderProvablyFairPanel();
     setupImageFallbacks();
@@ -703,21 +726,7 @@ function createChatAvatarUrl(username) {
     return `https://mc-heads.net/avatar/${encodeURIComponent(username || 'Steve')}/48`;
 }
 
-function getNormalizedGlobalStats(stats = {}) {
-    return {
-        onlinePlayers: Number(stats.onlinePlayers || 0),
-        totalBets: Number(stats.totalBets || 0),
-        totalWins: Number(stats.totalWins || 0),
-        totalLosses: Number(stats.totalLosses || 0),
-        totalWagered: Number(stats.totalWagered || 0),
-        netProfit: Number(stats.netProfit || 0)
-    };
-}
-
-function updateOnlinePlayerSkins(players = []) {
-    const container = document.getElementById('onlinePlayerSkins');
-    if (!container) return;
-
+function normalizePresencePlayers(players = []) {
     const normalizedPlayers = (Array.isArray(players) ? players : [])
         .map((player) => {
             if (typeof player === 'string') {
@@ -743,8 +752,25 @@ function updateOnlinePlayerSkins(players = []) {
         uniquePlayers.push(player);
     });
 
-    const shownPlayers = uniquePlayers
-        .slice(0, 10);
+    return uniquePlayers.slice(0, 12);
+}
+
+function getNormalizedGlobalStats(stats = {}) {
+    return {
+        onlinePlayers: Number(stats.onlinePlayers || 0),
+        totalBets: Number(stats.totalBets || 0),
+        totalWins: Number(stats.totalWins || 0),
+        totalLosses: Number(stats.totalLosses || 0),
+        totalWagered: Number(stats.totalWagered || 0),
+        netProfit: Number(stats.netProfit || 0)
+    };
+}
+
+function updateOnlinePlayerSkins(players = []) {
+    const container = document.getElementById('onlinePlayerSkins');
+    if (!container) return;
+
+    const shownPlayers = normalizePresencePlayers(players).slice(0, 10);
 
     if (shownPlayers.length === 0) {
         container.innerHTML = '<span class="story-avatar-empty">No live website players yet</span>';
@@ -783,6 +809,62 @@ function updateOnlinePlayerSkins(players = []) {
     setupImageFallbacks(container);
 }
 
+function renderTopbarOnlineList(players = []) {
+    const container = document.getElementById('topbarOnlineList');
+    if (!container) {
+        return;
+    }
+
+    const shownPlayers = normalizePresencePlayers(players);
+    currentOnlinePlayers = shownPlayers.slice();
+
+    if (shownPlayers.length === 0) {
+        container.innerHTML = '<div class="online-presence-empty">No players on the website yet.</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    shownPlayers.forEach((player) => {
+        const walletText = player.walletBalance === null
+            ? 'Wallet loading'
+            : `Wallet $${formatAmount(player.walletBalance)}`;
+        const item = document.createElement('button');
+        item.className = 'online-presence-item';
+        item.type = 'button';
+        item.title = `${player.username} - ${walletText}`;
+        item.dataset.presenceUser = player.username;
+
+        const avatar = document.createElement('img');
+        avatar.src = createChatAvatarUrl(player.username);
+        avatar.alt = `${player.username} skin`;
+        avatar.dataset.avatarName = player.username;
+        avatar.dataset.avatarSize = '48';
+        avatar.loading = 'lazy';
+
+        const copy = document.createElement('span');
+        const name = document.createElement('strong');
+        name.textContent = player.username;
+        const meta = document.createElement('small');
+        meta.textContent = walletText;
+        copy.append(name, meta);
+
+        item.append(avatar, copy);
+        item.addEventListener('click', () => {
+            playUiSound('toggle-on');
+            if (currentPlayer?.username && player.username.toLowerCase() === currentPlayer.username.toLowerCase()) {
+                setActiveGame('profile');
+                return;
+            }
+
+            primeChatInput(`@${player.username} `, true);
+        });
+
+        container.appendChild(item);
+    });
+
+    setupImageFallbacks(container);
+}
+
 function updateOnlinePresenceDisplay(presence = {}) {
     const onlineCount = typeof presence === 'number'
         ? Number(presence || 0)
@@ -818,6 +900,7 @@ function updateOnlinePresenceDisplay(presence = {}) {
         chatPresence.textContent = onlineSummary;
     }
 
+    renderTopbarOnlineList(players);
     updateOnlinePlayerSkins(players);
 }
 
@@ -993,7 +1076,7 @@ function renderProvablyFairPanel() {
     const state = provablyFairState || normalizeProvablyFairState();
     const supportedGames = state.supportedGames.length > 0
         ? state.supportedGames.filter((game) => game !== 'cases').join(', ')
-        : 'cases, sports, dice, plinko, roulette, coinflip, wheel, limbo';
+        : 'cases, chickenroad, safecracker, wirecut, dice, plinko, roulette, coinflip, wheel, limbo';
     const shortHash = state.serverSeedHash.length > 20
         ? `${state.serverSeedHash.slice(0, 12)}...${state.serverSeedHash.slice(-6)}`
         : state.serverSeedHash;
@@ -1237,6 +1320,7 @@ function setupChatQuickReplies() {
         }
 
         primeChatInput(button.dataset.chatReply || '', true);
+        playUiSound('toggle-on');
     });
 }
 
@@ -1452,8 +1536,64 @@ function setupRecentBetsToggle() {
 
     toggle.addEventListener('click', () => {
         recentBetsExpanded = !recentBetsExpanded;
+        playUiSound('toggle-on');
         loadRecentBets();
     });
+}
+
+function applyRecentBetsFilter(filter = 'all', expanded = recentBetsExpanded) {
+    recentBetsFilter = filter;
+    recentBetsExpanded = expanded;
+
+    const filterGroup = document.getElementById('betFeedFilters');
+    if (filterGroup) {
+        filterGroup.querySelectorAll('[data-bet-filter]').forEach((item) => {
+            item.classList.toggle('active', item.dataset.betFilter === filter);
+        });
+    }
+
+    loadRecentBets();
+}
+
+function toggleOnlinePresenceCard(forceOpen = null) {
+    const onlineCard = document.getElementById('topbarOnlineCard');
+    if (!onlineCard) {
+        return;
+    }
+
+    const nextState = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : !onlineCard.classList.contains('is-open');
+    onlineCard.classList.toggle('is-open', nextState);
+    playUiSound(nextState ? 'toggle-on' : 'modal-close');
+}
+
+function setupInteractiveShell() {
+    const openProfile = () => {
+        playUiSound('modal-open');
+        setActiveGame('profile');
+    };
+    ['sidebarBalanceCard', 'topbarWalletCard', 'userProfileCard'].forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element) {
+            return;
+        }
+
+        element.addEventListener('click', openProfile);
+    });
+
+    const onlineCard = document.getElementById('topbarOnlineCard');
+    if (onlineCard) {
+        onlineCard.addEventListener('click', () => {
+            toggleOnlinePresenceCard();
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!onlineCard.contains(event.target)) {
+                onlineCard.classList.remove('is-open');
+            }
+        });
+    }
 }
 
 function setupBetFeedFilters() {
@@ -1468,11 +1608,48 @@ function setupBetFeedFilters() {
             return;
         }
 
-        recentBetsFilter = button.dataset.betFilter || 'all';
-        filterGroup.querySelectorAll('[data-bet-filter]').forEach((item) => {
-            item.classList.toggle('active', item === button);
+        playUiSound('toggle-on');
+        applyRecentBetsFilter(button.dataset.betFilter || 'all', recentBetsExpanded);
+    });
+}
+
+function setupDashboardActions() {
+    const actionMap = {
+        floorPulseCard: () => {
+            playUiSound('toggle-on');
+            applyRecentBetsFilter('all', true);
+            document.getElementById('liveBets')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        summaryTileOnline: () => {
+            toggleOnlinePresenceCard(true);
+            document.getElementById('topbarOnlineCard')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        summaryTileWins: () => {
+            playUiSound('toggle-on');
+            applyRecentBetsFilter('wins', true);
+            document.getElementById('liveBets')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        summaryTileLosses: () => {
+            playUiSound('toggle-on');
+            applyRecentBetsFilter('losses', true);
+            document.getElementById('liveBets')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        summaryTileVolume: () => {
+            playUiSound('toggle-on');
+            applyRecentBetsFilter('all', true);
+            document.getElementById('liveBets')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    Object.entries(actionMap).forEach(([id, handler]) => {
+        const element = document.getElementById(id);
+        if (!element) {
+            return;
+        }
+
+        element.addEventListener('click', () => {
+            handler();
         });
-        renderRecentBetsList();
     });
 }
 
@@ -1718,11 +1895,215 @@ function syncResponsiveGameLayouts() {
     });
 }
 
+const MODE_PANEL_SELECTOR = [
+    '.bet-panel',
+    '.quick-wallet-panel',
+    '.mode-stage-card',
+    '.plinko-stage',
+    '.roulette-stage',
+    '.blackjack-table-shell',
+    '.crash-stage-panel',
+    '.sportsbook-hero',
+    '.sportsbook-slip',
+    '.deal-hero',
+    '.deal-math-card',
+    '.deal-offer-card',
+    '.deal-result-card',
+    '.coinflip-stage-card',
+    '.jackpot-stage',
+    '.jackpot-pot-card',
+    '.wallet-balance-card',
+    '.wallet-transfer-card',
+    '.feed-block',
+    '.chat-panel',
+    '.fairness-card',
+    '.case-card',
+    '.daily-crate-stage',
+    '.daily-claim-row'
+].join(', ');
+
+const MODE_STAGGER_SELECTOR = [
+    '.bet-panel > *',
+    '.quick-bet-btn',
+    '.stat-row',
+    '.selector-summary',
+    '.sports-fixture',
+    '.sports-market-btn',
+    '.sportsbook-result-card',
+    '.sportsbook-mini-card',
+    '.deal-case',
+    '.deal-math-row',
+    '.coinflip-side-btn',
+    '.blackjack-seat',
+    '.blackjack-meta-pill',
+    '.plinko-bucket',
+    '.mines-tile',
+    '.towers-tile',
+    '.keno-tile',
+    '.slot-reel',
+    '.jackpot-entry',
+    '.jackpot-history-row',
+    '.case-card',
+    '.case-item-preview',
+    '.case-summary-pill',
+    '.case-batch-card',
+    '.daily-claim-row'
+].join(', ');
+
+const MODE_LIVE_PULSE_SELECTOR = [
+    '.mode-result-banner',
+    '.mode-multiplier-display',
+    '#crashMultiplierOverlay',
+    '#rouletteResult',
+    '#rouletteStatus',
+    '#wheelResult',
+    '#diceResult',
+    '#diceNumber',
+    '#diceStatus',
+    '#limboResult',
+    '#limboStatus',
+    '#sportsbookPotentialPayout',
+    '#sportsbookStakePreview',
+    '#sportsbookResult',
+    '#kenoSelected',
+    '#caseResult'
+].join(', ');
+
+let gameContentEnhancerObserver = null;
+let gameContentEnhancerFrame = null;
+
+function getScopedMatches(scope, selector) {
+    if (!scope || typeof selector !== 'string' || !selector.trim()) {
+        return [];
+    }
+
+    const matches = [];
+    if (typeof scope.matches === 'function' && scope.matches(selector)) {
+        matches.push(scope);
+    }
+    if (typeof scope.querySelectorAll === 'function') {
+        matches.push(...scope.querySelectorAll(selector));
+    }
+    return matches;
+}
+
+function pulseMotionElement(element, className = 'is-live-updated') {
+    if (!element) {
+        return;
+    }
+
+    element.classList.remove(className);
+    void element.offsetWidth;
+    element.classList.add(className);
+
+    if (element.__motionPulseTimer) {
+        clearTimeout(element.__motionPulseTimer);
+    }
+
+    element.__motionPulseTimer = window.setTimeout(() => {
+        element.classList.remove(className);
+        element.__motionPulseTimer = null;
+    }, 760);
+}
+
+function bindLiveResultMotion(scope = document) {
+    getScopedMatches(scope, MODE_LIVE_PULSE_SELECTOR).forEach((element) => {
+        if (!element || element.dataset.motionObserved === 'true') {
+            return;
+        }
+
+        element.dataset.motionObserved = 'true';
+        element.classList.add('live-pulse-target');
+
+        const observer = new MutationObserver((mutations) => {
+            const hasContentChange = mutations.some((mutation) => {
+                if (mutation.type === 'characterData') {
+                    return true;
+                }
+                if (mutation.type === 'childList') {
+                    return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+                }
+                return false;
+            });
+
+            if (hasContentChange && (element.textContent || '').trim()) {
+                pulseMotionElement(element);
+            }
+        });
+
+        observer.observe(element, {
+            characterData: true,
+            childList: true,
+            subtree: true
+        });
+
+        element.__motionObserver = observer;
+    });
+}
+
+function primeModeMotion(scope = document) {
+    getScopedMatches(scope, '.game-container').forEach((element, index) => {
+        element.classList.add('mode-surface');
+        element.style.setProperty('--mode-shell-order', String(index % 10));
+    });
+
+    getScopedMatches(scope, MODE_PANEL_SELECTOR).forEach((element, index) => {
+        element.classList.add('mode-panel-surface');
+        element.style.setProperty('--motion-order', String(index % 14));
+    });
+
+    getScopedMatches(scope, MODE_STAGGER_SELECTOR).forEach((element, index) => {
+        element.classList.add('motion-stagger-item');
+        element.style.setProperty('--motion-order', String(index % 16));
+    });
+
+    bindLiveResultMotion(scope);
+}
+
+function scheduleGameContentEnhance() {
+    const gameContent = document.getElementById('gameContent');
+    if (!gameContent) {
+        return;
+    }
+
+    if (gameContentEnhancerFrame) {
+        cancelAnimationFrame(gameContentEnhancerFrame);
+    }
+
+    gameContentEnhancerFrame = requestAnimationFrame(() => {
+        gameContentEnhancerFrame = null;
+        enhanceGameUi(gameContent);
+    });
+}
+
+function setupGameContentEnhancer() {
+    const gameContent = document.getElementById('gameContent');
+    if (!gameContent || gameContentEnhancerObserver) {
+        return;
+    }
+
+    gameContentEnhancerObserver = new MutationObserver((mutations) => {
+        const hasStructuralChange = mutations.some((mutation) => (
+            mutation.type === 'childList' && (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)
+        ));
+
+        if (hasStructuralChange) {
+            scheduleGameContentEnhance();
+        }
+    });
+
+    gameContentEnhancerObserver.observe(gameContent, {
+        childList: true,
+        subtree: true
+    });
+}
+
 function enhanceGameUi(scope = document) {
     enhanceAmountInputs(scope);
     enhanceOptionSelectors(scope);
     registerResponsiveGameLayouts(scope);
     setupImageFallbacks(scope);
+    primeModeMotion(scope);
 }
 
 function getGameMeta(game) {
@@ -2101,17 +2482,7 @@ function renderQuickWalletPanel(container, game) {
     const panel = document.createElement('section');
     panel.className = 'quick-wallet-panel';
     panel.innerHTML = `
-        <div class="quick-wallet-balances">
-            <div>
-                <span>Website Wallet</span>
-                <strong id="walletTransferBalance">$${formatAmount(currentPlayer.balance)}</strong>
-            </div>
-            <div>
-                <span>Minecraft Balance</span>
-                <strong id="vaultTransferBalance">$${formatAmount(currentPlayer.vaultBalance)}</strong>
-            </div>
-        </div>
-        <div class="quick-wallet-actions">
+        <div class="quick-wallet-lane quick-wallet-lane-left">
             <form id="walletDepositForm" class="quick-wallet-form">
                 <label>
                     <span>Deposit</span>
@@ -2119,6 +2490,18 @@ function renderQuickWalletPanel(container, game) {
                 </label>
                 <button class="btn-primary wallet-transfer-btn" type="submit">Deposit</button>
             </form>
+            <div class="quick-wallet-side-card">
+                <span>&#x1FA99; Minecraft Balance</span>
+                <strong id="vaultTransferBalance">$${formatAmount(currentPlayer.vaultBalance)}</strong>
+                <small>Vault money ready to move in</small>
+            </div>
+        </div>
+        <button class="quick-wallet-core" id="quickWalletCore" type="button">
+            <span class="quick-wallet-core-kicker">&#x1F4B8; Wallet Core</span>
+            <strong id="walletTransferBalance">$${formatAmount(currentPlayer.balance)}</strong>
+            <span class="quick-wallet-core-copy">Website wallet stays in the middle so deposits, bets, and withdrawals all orbit one number.</span>
+        </button>
+        <div class="quick-wallet-lane quick-wallet-lane-right">
             <form id="walletWithdrawForm" class="quick-wallet-form">
                 <label>
                     <span>Withdraw</span>
@@ -2126,11 +2509,23 @@ function renderQuickWalletPanel(container, game) {
                 </label>
                 <button class="btn-secondary wallet-transfer-btn" type="submit">Withdraw</button>
             </form>
+            <div class="quick-wallet-side-card">
+                <span>&#x1F3AF; Bet Guardrail</span>
+                <strong>${getBetLimitMessage()}</strong>
+                <small>Keep every ticket inside the website limits</small>
+            </div>
         </div>
-        <div class="quick-wallet-limit-note">${getBetLimitMessage()}</div>
     `;
 
     container.prepend(panel);
+
+    const quickWalletCore = panel.querySelector('#quickWalletCore');
+    if (quickWalletCore) {
+        quickWalletCore.addEventListener('click', () => {
+            playUiSound('modal-open');
+            setActiveGame('profile');
+        });
+    }
 }
 
 function setActiveGame(game) {
@@ -2173,6 +2568,7 @@ function loadGame(game) {
         loader(gameContent);
         renderQuickWalletPanel(gameContent, game);
         enhanceGameUi(gameContent);
+        requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
         return;
     }
 
@@ -2188,6 +2584,7 @@ function loadGame(game) {
     `;
     renderQuickWalletPanel(gameContent, game);
     enhanceGameUi(gameContent);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
 }
 
 async function connectSocket() {
@@ -2597,6 +2994,7 @@ window.parseAmountInput = parseAmountInput;
 window.readAmountInput = readAmountInput;
 window.setAmountInputValue = setAmountInputValue;
 window.enhanceAmountInputs = enhanceAmountInputs;
+window.primeModeMotion = primeModeMotion;
 window.validateGameBetAmount = validateGameBetAmount;
 window.getBetLimitMessage = getBetLimitMessage;
 window.dispatchSiteNotification = dispatchSiteNotification;

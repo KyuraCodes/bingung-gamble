@@ -15,8 +15,8 @@ const {
 } = require('../config/provablyFair');
 
 const GENERIC_BET_EDGE = 0.8;
-const DICE_EDGE = 0.78;
-const LIMBO_EDGE = 0.68;
+const DICE_EDGE = 0.82;
+const LIMBO_EDGE = 0.72;
 const CRASH_EDGE = 0.8;
 const CRASH_GROWTH_RATE = 0.136;
 const LIMBO_MAX_TARGET = 25;
@@ -52,7 +52,7 @@ const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
 const COINFLIP_PAYOUT = 2;
 const DEAL_NO_DEAL_CASE_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
 const DEAL_NO_DEAL_REVEAL_COUNT = 6;
-const DEAL_NO_DEAL_OFFER_FACTOR = 0.74;
+const DEAL_NO_DEAL_OFFER_FACTOR = 0.78;
 const DEAL_NO_DEAL_SESSION_TTL_MS = 30 * 60 * 1000;
 const PLINKO_RISK_CONFIG = {
     low: { label: 'Low', targetEv: 0.78, centerFloor: 0.46, edgeBase: 2.7, edgeGrowth: 0.14, curve: 1.42 },
@@ -66,73 +66,42 @@ const WHEEL_SEGMENT_MAP = {
 };
 const JACKPOT_MAX_PLAYERS = 10;
 const JACKPOT_ROUND_MS = 30000;
-const SPORTSBOOK_EDGE = 0.84;
-const SPORTSBOOK_FIXTURES = [
-    {
-        id: 'bot-hoops',
-        sport: 'Basketball',
-        league: 'Bot Arena',
-        home: 'You',
-        away: 'Pulse Bot',
-        scoreMode: 'points',
-        suffix: '',
-        totalLine: 201.5,
-        markets: [
-            { id: 'home', label: 'You', odds: 1.94, kind: 'home' },
-            { id: 'away', label: 'Pulse Bot', odds: 1.94, kind: 'away' },
-            { id: 'over', label: 'Over 201.5', odds: 1.9, kind: 'over', line: 201.5 }
+const CHALLENGE_MODE_EDGE = 0.86;
+const CHALLENGE_MODE_CONFIG = {
+    chickenroad: {
+        title: 'Chicken Crossing',
+        plans: [
+            { id: '2-lanes', label: '2 Lanes', odds: 1.28, steps: 2, teaser: 'Warm-up sprint' },
+            { id: '4-lanes', label: '4 Lanes', odds: 1.72, steps: 4, teaser: 'Mid strip traffic' },
+            { id: '6-lanes', label: '6 Lanes', odds: 2.36, steps: 6, teaser: 'Tighter bus lane' },
+            { id: '8-lanes', label: '8 Lanes', odds: 3.24, steps: 8, teaser: 'Night rush' },
+            { id: '10-lanes', label: '10 Lanes', odds: 4.58, steps: 10, teaser: 'Chaos sprint' }
         ]
     },
-    {
-        id: 'goal-bot',
-        sport: 'Soccer',
-        league: 'Bot Cup',
-        home: 'You',
-        away: 'Keeper Bot',
-        scoreMode: 'goals',
-        suffix: '',
-        totalLine: 2.5,
-        markets: [
-            { id: 'home', label: 'You', odds: 2.02, kind: 'home' },
-            { id: 'away', label: 'Keeper Bot', odds: 1.86, kind: 'away' },
-            { id: 'over', label: 'Over 2.5', odds: 2.08, kind: 'over', line: 2.5 }
+    safecracker: {
+        title: 'Safecracker',
+        plans: [
+            { id: '2-locks', label: '2 Locks', odds: 1.46, locks: 2, teaser: 'Pocket safe' },
+            { id: '3-locks', label: '3 Locks', odds: 2.08, locks: 3, teaser: 'Office vault' },
+            { id: '4-locks', label: '4 Locks', odds: 3.12, locks: 4, teaser: 'Bank cage' },
+            { id: '5-locks', label: '5 Locks', odds: 4.72, locks: 5, teaser: 'Night vault' }
         ]
     },
-    {
-        id: 'court-royal',
-        sport: 'Tennis',
-        league: 'Royal Indoor',
-        home: 'Mika Stone',
-        away: 'Rian Vale',
-        scoreMode: 'sets',
-        suffix: 'sets',
-        totalLine: 2.5,
-        markets: [
-            { id: 'home', label: 'Mika Stone', odds: 1.72, kind: 'home' },
-            { id: 'away', label: 'Rian Vale', odds: 2.34, kind: 'away' },
-            { id: 'over', label: 'Over 2.5 sets', odds: 2.48, kind: 'over', line: 2.5 }
-        ]
-    },
-    {
-        id: 'rift-rush',
-        sport: 'Esports',
-        league: 'Rift Rush Series',
-        home: 'Ghost Signal',
-        away: 'Nova Pulse',
-        scoreMode: 'maps',
-        suffix: 'maps',
-        totalLine: 2.5,
-        markets: [
-            { id: 'home', label: 'Ghost Signal', odds: 1.9, kind: 'home' },
-            { id: 'away', label: 'Nova Pulse', odds: 1.98, kind: 'away' },
-            { id: 'over', label: 'Over 2.5 maps', odds: 2.18, kind: 'over', line: 2.5 }
+    wirecut: {
+        title: 'Wire Cut',
+        plans: [
+            { id: 'green', label: 'Green Wire', odds: 1.58, wireColor: 'green', pulseWindowMs: 620, teaser: 'Wide safety window' },
+            { id: 'blue', label: 'Blue Wire', odds: 2.24, wireColor: 'blue', pulseWindowMs: 420, teaser: 'Tighter rhythm' },
+            { id: 'red', label: 'Red Wire', odds: 3.68, wireColor: 'red', pulseWindowMs: 240, teaser: 'One sharp cut' }
         ]
     }
-];
+};
 const KNOWN_GAME_TYPES = new Set([
     'casino',
     'crash',
-    'sports',
+    'chickenroad',
+    'safecracker',
+    'wirecut',
     'dealnodeal',
     'mines',
     'towers',
@@ -147,12 +116,14 @@ const KNOWN_GAME_TYPES = new Set([
     'cases',
     'jackpot'
 ]);
-const SERVER_PLAY_GAME_TYPES = new Set(['sports', 'dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo']);
+const SERVER_PLAY_GAME_TYPES = new Set(['chickenroad', 'safecracker', 'wirecut', 'dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo']);
 const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'slots']);
 const MAX_MULTIPLIER_BY_GAME = {
     casino: 40,
     crash: 80,
-    sports: 4,
+    chickenroad: 4.58,
+    safecracker: 4.72,
+    wirecut: 3.68,
     dealnodeal: 50,
     mines: 6.5,
     towers: 3.6,
@@ -325,16 +296,18 @@ function sanitizePlinkoRows(value) {
     return Math.max(MIN_PLINKO_ROWS, Math.min(MAX_PLINKO_ROWS, parsed));
 }
 
-function getSportsbookFixture(fixtureId) {
-    return SPORTSBOOK_FIXTURES.find((fixture) => fixture.id === String(fixtureId || '').toLowerCase()) || null;
+function getChallengeModeConfig(gameType) {
+    const safeGameType = String(gameType || '').toLowerCase();
+    return CHALLENGE_MODE_CONFIG[safeGameType] || null;
 }
 
-function getSportsbookMarket(fixture, marketId) {
-    if (!fixture) {
+function getChallengePlan(config, planId) {
+    if (!config) {
         return null;
     }
 
-    return fixture.markets.find((market) => market.id === String(marketId || '').toLowerCase()) || null;
+    const safePlanId = String(planId || '').toLowerCase();
+    return config.plans.find((plan) => plan.id === safePlanId) || config.plans[0] || null;
 }
 
 function seededRoll(profile, nonceUsed, cursor = 0) {
@@ -356,82 +329,77 @@ function seededInt(profile, nonceUsed, cursor, minInclusive, maxInclusive) {
     });
 }
 
-function buildSportsbookSeriesScore({ fixture, market, won, profile, nonceUsed }) {
-    const preferHome = market.kind === 'home';
-    const actualHomeWins = market.kind === 'over'
-        ? seededRoll(profile, nonceUsed, 6) >= 0.5
-        : (preferHome ? won : !won);
-    const actualOver = market.kind === 'over' ? won : seededRoll(profile, nonceUsed, 7) >= 0.5;
-
-    let homeScore;
-    let awayScore;
-
-    if (actualOver) {
-        homeScore = actualHomeWins ? 2 : 1;
-        awayScore = actualHomeWins ? 1 : 2;
-    } else {
-        homeScore = actualHomeWins ? 2 : 0;
-        awayScore = actualHomeWins ? 0 : 2;
-    }
-
-    const scoreline = `${fixture.home} ${homeScore}-${awayScore} ${fixture.away}`;
-    const suffix = fixture.suffix ? ` ${fixture.suffix}` : '';
-    const winner = homeScore > awayScore ? fixture.home : fixture.away;
+function buildChickenRoadPresentation({ plan, won, profile, nonceUsed }) {
+    const clippedLane = won ? plan.steps : seededInt(profile, nonceUsed, 8, 1, plan.steps);
+    const clearedLanes = won ? plan.steps : Math.max(0, clippedLane - 1);
 
     return {
-        scoreline,
-        headline: `${winner} closed the match ${homeScore}-${awayScore}${suffix}.`,
-        detail: market.kind === 'over'
-            ? `${market.label} ${won ? 'cleared' : 'missed'} with a ${homeScore + awayScore}${suffix} finish.`
-            : `${market.label} ${won ? 'held the ticket' : 'fell short'} over ${homeScore + awayScore}${suffix}.`
+        headline: won
+            ? `Chicken cleared all ${plan.steps} lanes clean.`
+            : `Traffic clipped the run on lane ${clippedLane}.`,
+        detail: won
+            ? `${plan.label} paid because the chicken hit the far curb before the lights changed.`
+            : `The run ended after ${clearedLanes} safe lane${clearedLanes === 1 ? '' : 's'} with no payout.`,
+        resultLine: `${clearedLanes}/${plan.steps} lanes cleared`
     };
 }
 
-function buildSportsbookPointsScore({ fixture, market, won, profile, nonceUsed }) {
-    const isFootball = fixture.scoreMode === 'goals';
-    let homeScore = seededInt(profile, nonceUsed, 2, isFootball ? 0 : 92, isFootball ? 3 : 121);
-    let awayScore = seededInt(profile, nonceUsed, 3, isFootball ? 0 : 88, isFootball ? 4 : 118);
-
-    if (market.kind === 'home' || market.kind === 'away') {
-        const actualHomeWins = market.kind === 'home' ? won : !won;
-        if (actualHomeWins && homeScore <= awayScore) {
-            homeScore = awayScore + seededInt(profile, nonceUsed, 4, 1, isFootball ? 2 : 12);
-        }
-        if (!actualHomeWins && awayScore <= homeScore) {
-            awayScore = homeScore + seededInt(profile, nonceUsed, 5, 1, isFootball ? 2 : 12);
-        }
-    } else {
-        const totalLine = Number(market.line || fixture.totalLine || 0);
-        const actualOver = won;
-        const minimumTotal = actualOver ? Math.ceil(totalLine + 1) : 0;
-        const maximumTotal = actualOver
-            ? (isFootball ? 6 : 244)
-            : Math.max(0, Math.floor(totalLine));
-        const total = Math.max(minimumTotal, seededInt(profile, nonceUsed, 4, minimumTotal, Math.max(minimumTotal, maximumTotal)));
-        const homeShareFloor = isFootball ? 0 : 84;
-        const homeShareCeiling = total - (isFootball ? 0 : 80);
-        homeScore = seededInt(profile, nonceUsed, 5, Math.max(0, homeShareFloor), Math.max(Math.max(0, homeShareFloor), homeShareCeiling));
-        awayScore = Math.max(0, total - homeScore);
-    }
-
-    const scoreline = `${fixture.home} ${homeScore} - ${awayScore} ${fixture.away}`;
-    const winner = homeScore === awayScore ? 'The board' : (homeScore > awayScore ? fixture.home : fixture.away);
+function buildSafecrackerPresentation({ plan, won, profile, nonceUsed }) {
+    const jammedLock = won ? plan.locks : seededInt(profile, nonceUsed, 8, 1, plan.locks);
+    const alignedLocks = won ? plan.locks : Math.max(0, jammedLock - 1);
 
     return {
-        scoreline,
-        headline: `${winner} ${homeScore === awayScore ? 'finished level' : 'closed it'} at ${homeScore}-${awayScore}.`,
-        detail: market.kind === 'over'
-            ? `${market.label} ${won ? 'cashed' : 'stayed under'} on a ${homeScore + awayScore} total.`
-            : `${market.label} ${won ? 'got home clean' : 'missed the ticket'} on the final whistle.`
+        headline: won
+            ? `All ${plan.locks} tumblers snapped open.`
+            : `Lock ${jammedLock} jammed the crack sequence.`,
+        detail: won
+            ? `${plan.label} paid because every dial landed inside the green pressure band.`
+            : `${alignedLocks}/${plan.locks} locks aligned before the vault froze shut.`,
+        resultLine: `${alignedLocks}/${plan.locks} locks aligned`
     };
 }
 
-function buildSportsbookPresentation({ fixture, market, won, profile, nonceUsed }) {
-    if (fixture.scoreMode === 'sets' || fixture.scoreMode === 'maps') {
-        return buildSportsbookSeriesScore({ fixture, market, won, profile, nonceUsed });
+function buildWireCutPresentation({ config, plan, won, profile, nonceUsed }) {
+    const safePlan = won
+        ? plan
+        : config.plans.filter((entry) => entry.id !== plan.id)[rollInt({
+            serverSeed: profile.server_seed,
+            clientSeed: profile.client_seed,
+            nonce: nonceUsed,
+            cursor: 8,
+            maxExclusive: Math.max(1, config.plans.length - 1)
+        }) % Math.max(1, config.plans.length - 1)];
+    const pulseWindowMs = seededInt(profile, nonceUsed, 9, Math.max(120, plan.pulseWindowMs - 80), plan.pulseWindowMs + 80);
+
+    return {
+        headline: won
+            ? `${plan.label} was the live safe cut.`
+            : `${safePlan?.label || 'Another wire'} was the only safe cut.`,
+        detail: won
+            ? `You cut inside a ${pulseWindowMs}ms safety window and kept the device quiet.`
+            : `The wrong wire lit the board before the ${pulseWindowMs}ms safety window closed.`,
+        resultLine: `Safe wire: ${(safePlan || plan).label}`
+    };
+}
+
+function buildChallengeModePresentation({ gameType, config, plan, won, profile, nonceUsed }) {
+    if (gameType === 'chickenroad') {
+        return buildChickenRoadPresentation({ plan, won, profile, nonceUsed });
     }
 
-    return buildSportsbookPointsScore({ fixture, market, won, profile, nonceUsed });
+    if (gameType === 'safecracker') {
+        return buildSafecrackerPresentation({ plan, won, profile, nonceUsed });
+    }
+
+    if (gameType === 'wirecut') {
+        return buildWireCutPresentation({ config, plan, won, profile, nonceUsed });
+    }
+
+    return {
+        headline: won ? `${config.title} ticket cleared.` : `${config.title} ticket missed.`,
+        detail: `${plan.label} resolved on the server.`,
+        resultLine: plan.label
+    };
 }
 
 function buildDealNoDealBoard(amount, profile, nonceUsed) {
@@ -1307,35 +1275,41 @@ function ensureCrashLoopStarted() {
 }
 
 function resolveServerGame({ gameType, amount, body, profile, nonceUsed }) {
-    if (gameType === 'sports') {
-        const fixture = getSportsbookFixture(body.fixtureId);
-        const market = getSportsbookMarket(fixture, body.marketId);
+    const challengeConfig = getChallengeModeConfig(gameType);
+    if (challengeConfig) {
+        const plan = getChallengePlan(challengeConfig, body.planId);
 
-        if (!fixture || !market) {
-            return buildError(400, 'That market is no longer available');
+        if (!plan) {
+            return buildError(400, 'That plan is no longer available');
         }
 
         const roll = seededRoll(profile, nonceUsed, 0);
-        const winChance = Math.min(0.92, SPORTSBOOK_EDGE / Number(market.odds || 1));
+        const winChance = Math.min(0.94, CHALLENGE_MODE_EDGE / Number(plan.odds || 1));
         const won = roll < winChance;
-        const presentation = buildSportsbookPresentation({ fixture, market, won, profile, nonceUsed });
+        const presentation = buildChallengeModePresentation({
+            gameType,
+            config: challengeConfig,
+            plan,
+            won,
+            profile,
+            nonceUsed
+        });
 
         return {
             amount,
-            payout: won ? toMoney(amount * market.odds) : 0,
-            multiplier: won ? Number(market.odds) : 0,
+            payout: won ? toMoney(amount * plan.odds) : 0,
+            multiplier: won ? Number(plan.odds) : 0,
             won,
             meta: {
-                sportsbook: {
-                    fixtureId: fixture.id,
-                    sport: fixture.sport,
-                    league: fixture.league,
-                    matchup: `${fixture.home} vs ${fixture.away}`,
-                    selection: market.label,
-                    odds: Number(market.odds),
-                    scoreline: presentation.scoreline,
+                challengeMode: {
+                    gameType,
+                    title: challengeConfig.title,
+                    selection: plan.label,
+                    planId: plan.id,
+                    odds: Number(plan.odds),
                     headline: presentation.headline,
-                    detail: presentation.detail
+                    detail: presentation.detail,
+                    resultLine: presentation.resultLine
                 },
                 fairness: buildFairnessPayload(profile, nonceUsed, { roll }),
                 winChance

@@ -1,19 +1,19 @@
 // ===== CRASH GAME WITH ULTRA COMPLEX GRAPH =====
 function loadCrashGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container crash-game">
+            <div class="game-split-layout crash-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div class="crash-stage-panel" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; position: relative; height: 500px;">
+                    <div class="crash-stage-panel mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; position: relative; height: 500px;">
                         <canvas id="crashCanvas" width="800" height="460" style="width: 100%; height: 100%;"></canvas>
                         <div id="crashCountdownBanner" class="crash-countdown-banner">
                             <span>Round Starting In</span>
                             <strong>--</strong>
                         </div>
-                        <div id="crashMultiplierOverlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: 900; text-shadow: 0 0 30px rgba(0,0,0,0.8); pointer-events: none; z-index: 10;">1.00x</div>
+                        <div id="crashMultiplierOverlay" class="mode-multiplier-display crash-multiplier-display" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: 900; text-shadow: 0 0 30px rgba(0,0,0,0.8); pointer-events: none; z-index: 10;">1.00x</div>
                     </div>
                     
-                    <div style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                    <div class="crash-stat-bar mode-stage-card" style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">CURRENT BET</div>
@@ -30,7 +30,7 @@ function loadCrashGame(container) {
                         </div>
                     </div>
                     
-                    <div id="crashHistory" style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;"></div>
+                    <div id="crashHistory" class="crash-history-strip" style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;"></div>
                 </div>
                 
                 <div class="bet-panel">
@@ -104,88 +104,91 @@ let crashUiTicker = null;
 let jackpotState = null;
 let jackpotPoller = null;
 const CRASH_EDGE = 0.8;
-const DICE_EDGE = 0.78;
+const DICE_EDGE = 0.82;
 const COINFLIP_PAYOUT = 2;
-const LIMBO_EDGE = 0.68;
+const LIMBO_EDGE = 0.72;
 const GAME_COOLDOWN_MS = 900;
 const LONG_GAME_COOLDOWN_MS = 1400;
 const CRASH_MAX_MULTIPLIER = 80;
 const LIMBO_MAX_TARGET = 25;
-const MINES_EDGE = 0.8;
+const MINES_EDGE = 0.84;
 const TOWERS_STEP_MULTIPLIER = 0.24;
 const BLACKJACK_NATURAL_PAYOUT = 2.2;
 const KENO_PAYOUTS = { 5: 1.15, 6: 1.8, 7: 3.2, 8: 6.4, 9: 12, 10: 24 };
+const SLOT_SYMBOLS = {
+    cherry: '\u{1F352}',
+    lemon: '\u{1F34B}',
+    orange: '\u{1F34A}',
+    grape: '\u{1F347}',
+    diamond: '\u{1F48E}',
+    seven: '7\uFE0F\u20E3'
+};
+const SLOT_SYMBOL_ORDER = [
+    SLOT_SYMBOLS.cherry,
+    SLOT_SYMBOLS.lemon,
+    SLOT_SYMBOLS.orange,
+    SLOT_SYMBOLS.grape,
+    SLOT_SYMBOLS.diamond,
+    SLOT_SYMBOLS.seven
+];
 const SLOTS_PAYTABLE = {
-    'ðŸ’': 2,
-    'ðŸ‹': 4,
-    'ðŸŠ': 6,
-    'ðŸ‡': 9,
-    'ðŸ’Ž': 14,
-    '7ï¸âƒ£': 24
+    [SLOT_SYMBOLS.cherry]: 2,
+    [SLOT_SYMBOLS.lemon]: 4,
+    [SLOT_SYMBOLS.orange]: 6,
+    [SLOT_SYMBOLS.grape]: 9,
+    [SLOT_SYMBOLS.diamond]: 14,
+    [SLOT_SYMBOLS.seven]: 24
 };
 const GAME_ACTION_BUSY = new Set();
 const GAME_ACTION_COOLDOWNS = new Map();
-const SPORTSBOOK_SLATE = [
-    {
-        id: 'bot-hoops',
-        sport: 'Basketball',
-        league: 'Bot Arena',
-        home: 'You',
-        away: 'Pulse Bot',
-        start: 'Sim Ready',
-        note: 'No stick skill needed. Pick your side and let the bot sim run.',
-        markets: [
-            { id: 'home', label: 'You', odds: 1.94 },
-            { id: 'away', label: 'Pulse Bot', odds: 1.94 },
-            { id: 'over', label: 'Over 201.5', odds: 1.9 }
+const CHALLENGE_MODE_CONFIG = {
+    chickenroad: {
+        title: 'Chicken Crossing',
+        kicker: 'Road Rush',
+        heroTitle: 'Pick the curb and let the traffic decide.',
+        heroCopy: 'No tapping minigame. You buy a lane count, the server resolves the run, and the floor feed gets the result.',
+        slipTitle: 'Crossing Ticket',
+        note: 'Crossing plans resolve on the server so the wallet, fairness panel, and live feed stay synced.',
+        plans: [
+            { id: '2-lanes', label: '2 Lanes', odds: 1.28, teaser: 'Warm-up sprint', metricLabel: 'Distance', metricValue: '2 lanes' },
+            { id: '4-lanes', label: '4 Lanes', odds: 1.72, teaser: 'Mid strip traffic', metricLabel: 'Distance', metricValue: '4 lanes' },
+            { id: '6-lanes', label: '6 Lanes', odds: 2.36, teaser: 'Tighter bus lane', metricLabel: 'Distance', metricValue: '6 lanes' },
+            { id: '8-lanes', label: '8 Lanes', odds: 3.24, teaser: 'Night rush', metricLabel: 'Distance', metricValue: '8 lanes' },
+            { id: '10-lanes', label: '10 Lanes', odds: 4.58, teaser: 'Chaos sprint', metricLabel: 'Distance', metricValue: '10 lanes' }
         ]
     },
-    {
-        id: 'goal-bot',
-        sport: 'Soccer',
-        league: 'Bot Cup',
-        home: 'You',
-        away: 'Keeper Bot',
-        start: 'Sim Ready',
-        note: 'A clean soccer bot sweat with no aiming or dribbling minigame.',
-        markets: [
-            { id: 'home', label: 'You', odds: 2.02 },
-            { id: 'away', label: 'Keeper Bot', odds: 1.86 },
-            { id: 'over', label: 'Over 2.5', odds: 2.08 }
+    safecracker: {
+        title: 'Safecracker',
+        kicker: 'Vault Dial',
+        heroTitle: 'Choose the lock stack and pray the tumblers click.',
+        heroCopy: 'Pick how deep the vault run goes, then let the server reveal whether every dial lands in the green.',
+        slipTitle: 'Heist Ticket',
+        note: 'Every crack attempt is server-resolved with clear odds, not hidden client-side tricks.',
+        plans: [
+            { id: '2-locks', label: '2 Locks', odds: 1.46, teaser: 'Pocket safe', metricLabel: 'Locks', metricValue: '2 locks' },
+            { id: '3-locks', label: '3 Locks', odds: 2.08, teaser: 'Office vault', metricLabel: 'Locks', metricValue: '3 locks' },
+            { id: '4-locks', label: '4 Locks', odds: 3.12, teaser: 'Bank cage', metricLabel: 'Locks', metricValue: '4 locks' },
+            { id: '5-locks', label: '5 Locks', odds: 4.72, teaser: 'Night vault', metricLabel: 'Locks', metricValue: '5 locks' }
         ]
     },
-    {
-        id: 'court-royal',
-        sport: 'Tennis',
-        league: 'Royal Indoor',
-        home: 'Mika Stone',
-        away: 'Rian Vale',
-        start: 'Tonight 23:10',
-        note: 'Serve-heavy matchup with a live dog.',
-        markets: [
-            { id: 'home', label: 'Mika Stone', odds: 1.72 },
-            { id: 'away', label: 'Rian Vale', odds: 2.34 },
-            { id: 'over', label: 'Over 2.5 sets', odds: 2.48 }
-        ]
-    },
-    {
-        id: 'rift-rush',
-        sport: 'Esports',
-        league: 'Rift Rush Series',
-        home: 'Ghost Signal',
-        away: 'Nova Pulse',
-        start: 'Live Map Draft',
-        note: 'Momentum flips hard after first blood.',
-        markets: [
-            { id: 'home', label: 'Ghost Signal', odds: 1.9 },
-            { id: 'away', label: 'Nova Pulse', odds: 1.98 },
-            { id: 'over', label: 'Over 2.5 maps', odds: 2.18 }
+    wirecut: {
+        title: 'Wire Cut',
+        kicker: 'Bomb Table',
+        heroTitle: 'Pick one wire route and live with the cut.',
+        heroCopy: 'The pulse window gets tighter as the payout climbs. Choose your wire, send the bet, and let the device answer.',
+        slipTitle: 'Defuse Ticket',
+        note: 'Wire Cut stays fair and server-resolved, so the only pressure comes from the plan you choose.',
+        plans: [
+            { id: 'green', label: 'Green Wire', odds: 1.58, teaser: 'Wide safety window', metricLabel: 'Window', metricValue: '620ms' },
+            { id: 'blue', label: 'Blue Wire', odds: 2.24, teaser: 'Tighter rhythm', metricLabel: 'Window', metricValue: '420ms' },
+            { id: 'red', label: 'Red Wire', odds: 3.68, teaser: 'One sharp cut', metricLabel: 'Window', metricValue: '240ms' }
         ]
     }
-];
-let sportsbookSelection = {
-    fixtureId: SPORTSBOOK_SLATE[0].id,
-    marketId: SPORTSBOOK_SLATE[0].markets[0].id
+};
+let challengeModeSelections = {
+    chickenroad: CHALLENGE_MODE_CONFIG.chickenroad.plans[1].id,
+    safecracker: CHALLENGE_MODE_CONFIG.safecracker.plans[1].id,
+    wirecut: CHALLENGE_MODE_CONFIG.wirecut.plans[0].id
 };
 const DEAL_NO_DEAL_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
 let dealNoDealState = null;
@@ -196,9 +199,9 @@ function loadDealnodealGame(container) {
             <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.4fr) minmax(320px, 0.9fr)">
                 <section class="deal-stage">
                     <div class="deal-hero">
-                        <span class="banner-tag">New Mode • 16 Cases</span>
-                        <h3>Take the banker offer or ride the final case.</h3>
-                        <p>Every board scales from your stake. The top case is always 50x, and your exact bet value sits as the fifth-highest case on the board.</p>
+                        <span class="banner-tag">New Mode &#8226; 16 Cases</span>
+                        <h3>Pick one case, open six, then stare down the banker.</h3>
+                        <p>Every board scales from your stake. The top case is always 50x, your exact bet sits as the fifth-highest case, and the first banker offer lands after six reveals.</p>
                     </div>
                     <div id="dealNoDealBoard" class="deal-board"></div>
                 </section>
@@ -242,6 +245,7 @@ function loadDealnodealGame(container) {
             }
 
             window.setAmountInputValue('dealNoDealBetAmount', nextAmount);
+            playGameSound('toggle-on');
             renderDealNoDealMathPreview();
         });
     });
@@ -258,6 +262,30 @@ function getDealNoDealPreviewAmount() {
     }
 
     return 1e10;
+}
+
+function getDealNoDealBoardAmount() {
+    return Number(dealNoDealState?.amount || getDealNoDealPreviewAmount());
+}
+
+function buildDealNoDealMoneyLadder(cases = []) {
+    const boardAmount = getDealNoDealBoardAmount();
+    const openedValues = new Set(
+        cases
+            .filter((entry) => entry.value !== null)
+            .map((entry) => Math.round(Number(entry.value || 0) * 100))
+    );
+
+    return DEAL_NO_DEAL_MULTIPLIERS.map((multiplier, index) => {
+        const value = Number((boardAmount * multiplier).toFixed(2));
+        return {
+            index,
+            value,
+            displayValue: formatAmount(value),
+            multiplierLabel: multiplier >= 10 ? `${multiplier.toFixed(0)}x` : `${multiplier.toFixed(multiplier >= 1 ? 1 : 2)}x`,
+            isOpened: openedValues.has(Math.round(value * 100))
+        };
+    });
 }
 
 function renderDealNoDealMathPreview() {
@@ -300,24 +328,89 @@ function renderDealNoDealState() {
         opened: false,
         isChosen: false
     }));
+    const boardAmount = getDealNoDealBoardAmount();
+    const moneyLadder = buildDealNoDealMoneyLadder(cases);
+    const openedCount = cases.filter((entry) => entry.opened).length;
+    const chosenCase = cases.find((entry) => entry.isChosen) || null;
+    const disabled = !!dealNoDealState?.active || !!dealNoDealState?.resolved;
+    const stageCasesLabel = dealNoDealState?.resolved ? 'Cases Revealed' : 'Cases Opened';
+    const stageCasesValue = dealNoDealState?.resolved ? `${cases.length}/${cases.length}` : `${openedCount}/6`;
+    const boardHeadline = dealNoDealState?.resolved
+        ? 'Final board reveal'
+        : dealNoDealState?.active
+            ? 'Round one complete'
+            : 'Pick your case to start';
+    const boardCopy = dealNoDealState?.resolved
+        ? 'Every amount on the board is open now, so you can compare the banker offer against the hidden case outcome.'
+        : dealNoDealState?.active
+            ? 'Six cases are gone. The banker has priced the remaining board, and your personal case is still sealed.'
+            : 'Choose one case to keep. The first round instantly opens six other cases before the banker calls.';
+    const stageStateClass = dealNoDealState?.resolved ? 'is-resolved' : dealNoDealState?.active ? 'is-live' : 'is-idle';
 
-    board.innerHTML = cases.map((entry) => {
-        const buttonClass = [
-            'deal-case',
-            entry.opened ? 'is-opened' : '',
-            entry.isChosen ? 'is-chosen' : '',
-            dealNoDealState?.resolved ? 'is-resolved' : ''
-        ].filter(Boolean).join(' ');
-        const disabled = !!dealNoDealState?.active || !!dealNoDealState?.resolved;
+    board.innerHTML = `
+        <div class="deal-stage-shell ${stageStateClass}">
+            <div class="deal-stage-head">
+                <div class="deal-stage-copy">
+                    <span class="sportsbook-slip-kicker">Main Board</span>
+                    <strong>${boardHeadline}</strong>
+                    <p>${boardCopy}</p>
+                </div>
+                <div class="deal-stage-stats">
+                    <div class="deal-stage-stat">
+                        <span>Round</span>
+                        <strong>1 / 1</strong>
+                    </div>
+                    <div class="deal-stage-stat">
+                        <span>${stageCasesLabel}</span>
+                        <strong>${stageCasesValue}</strong>
+                    </div>
+                    <div class="deal-stage-stat">
+                        <span>Top Prize</span>
+                        <strong>$${formatAmount(boardAmount * 50)}</strong>
+                    </div>
+                </div>
+            </div>
 
-        return `
-            <button class="${buttonClass}" type="button" ${disabled ? 'disabled' : ''} onclick="startDealNoDeal(${entry.index})">
-                <span class="deal-case-label">Case ${entry.label}</span>
-                <strong>${entry.value === null ? 'Tap To Lock' : `$${formatAmount(entry.value)}`}</strong>
-                <span>${entry.isChosen ? 'Your case' : entry.opened ? 'Opened' : 'Sealed'}</span>
-            </button>
-        `;
-    }).join('');
+            <div class="deal-show-board">
+                <div class="deal-value-column">
+                    ${moneyLadder.slice(0, 8).map((entry) => `
+                        <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
+                            <span>${entry.multiplierLabel}</span>
+                            <strong>$${entry.displayValue}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="deal-case-grid">
+                    ${cases.map((entry) => {
+                        const buttonClass = [
+                            'deal-case',
+                            entry.opened ? 'is-opened' : '',
+                            entry.isChosen ? 'is-chosen' : '',
+                            dealNoDealState?.resolved ? 'is-resolved' : ''
+                        ].filter(Boolean).join(' ');
+
+                        return `
+                            <button class="${buttonClass}" type="button" ${disabled ? 'disabled' : ''} onclick="startDealNoDeal(${entry.index})">
+                                <span class="deal-case-number">${String(entry.label).padStart(2, '0')}</span>
+                                <strong>${entry.value === null ? 'Tap To Lock' : `$${formatAmount(entry.value)}`}</strong>
+                                <span class="deal-case-status">${entry.isChosen ? 'Your Case' : entry.opened ? 'Opened' : 'Sealed'}</span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+
+                <div class="deal-value-column">
+                    ${moneyLadder.slice(8).map((entry) => `
+                        <div class="deal-value-pill ${entry.isOpened ? 'is-opened' : ''}">
+                            <span>${entry.multiplierLabel}</span>
+                            <strong>$${entry.displayValue}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
 
     if (!dealNoDealState?.active && !dealNoDealState?.resolved) {
         offer.innerHTML = `
@@ -331,7 +424,6 @@ function renderDealNoDealState() {
     }
 
     if (dealNoDealState?.resolved) {
-        const chosenCase = dealNoDealState.cases.find((entry) => entry.isChosen);
         const tookDeal = dealNoDealState.resolution === 'deal';
         offer.innerHTML = `
             <span class="sportsbook-slip-kicker">Final Resolution</span>
@@ -398,15 +490,23 @@ async function startDealNoDeal(caseIndex) {
         return;
     }
 
+    if (!startGameAction('dealnodeal:start', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     const amount = readAmountInput('dealNoDealBetAmount');
     if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Deal or No Deal bet')) {
+        finishGameAction('dealnodeal:start', 250);
         return;
     }
 
     if (amount > Number(currentPlayer?.balance || 0)) {
         showNotification('Insufficient balance', 'error');
+        finishGameAction('dealnodeal:start', 250);
         return;
     }
+
+    playGameSound('shuffle');
 
     try {
         const response = await fetch('/api/game/deal-or-no-deal/start', {
@@ -426,10 +526,14 @@ async function startDealNoDeal(caseIndex) {
         hydratePlayerStateFromResult(data);
         dealNoDealState = data.dealNoDeal || null;
         renderDealNoDealState();
+        playGameSound('reveal');
         showNotification(`Banker opens at $${formatAmount(data.dealNoDeal?.bankerOffer || 0)}.`, 'success');
     } catch (error) {
         console.error('Deal or No Deal start failed:', error);
+        playGameSound('explode');
         showNotification(error.message || 'Could not start Deal or No Deal', 'error');
+    } finally {
+        finishGameAction('dealnodeal:start', LONG_GAME_COOLDOWN_MS);
     }
 }
 
@@ -439,7 +543,12 @@ async function resolveDealNoDeal(choice) {
         return;
     }
 
+    if (!startGameAction('dealnodeal:resolve', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
     const route = choice === 'deal' ? 'deal' : 'no-deal';
+    playGameSound(route === 'deal' ? 'cashout' : 'reveal');
 
     try {
         const response = await fetch(`/api/game/deal-or-no-deal/${route}`, {
@@ -455,6 +564,7 @@ async function resolveDealNoDeal(choice) {
         hydratePlayerStateFromResult(data);
         dealNoDealState = data.dealNoDeal || null;
         renderDealNoDealState();
+        playGameSound(route === 'deal' || data.won ? 'cashout' : 'explode');
         showNotification(
             route === 'deal'
                 ? `Banker paid $${formatAmount(data.payout || 0)}.`
@@ -463,7 +573,10 @@ async function resolveDealNoDeal(choice) {
         );
     } catch (error) {
         console.error('Deal or No Deal resolve failed:', error);
+        playGameSound('explode');
         showNotification(error.message || 'Could not resolve Deal or No Deal', 'error');
+    } finally {
+        finishGameAction('dealnodeal:resolve', LONG_GAME_COOLDOWN_MS);
     }
 }
 
@@ -640,6 +753,13 @@ function syncCrashGraphState(state) {
 
     crashGameRunning = phase === 'running';
     crashPreviousPhase = phase;
+
+    const crashStagePanel = document.querySelector('.crash-stage-panel');
+    if (crashStagePanel) {
+        crashStagePanel.classList.toggle('is-betting', phase === 'betting');
+        crashStagePanel.classList.toggle('is-live', phase === 'running');
+        crashStagePanel.classList.toggle('is-crashed', phase === 'crashed');
+    }
 }
 
 function handleCrashRealtimeState(state) {
@@ -1203,11 +1323,11 @@ function playGameSound(kind) {
 // ===== MINES GAME =====
 function loadMinesGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div>
-                    <div id="minesGrid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;"></div>
-                    <div id="minesResult" style="text-align: center; font-size: 24px; font-weight: 800; padding: 20px;"></div>
+        <div class="game-container mines-game">
+            <div class="game-split-layout mines-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="mines-stage mode-stage-card">
+                    <div id="minesGrid" class="mines-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;"></div>
+                    <div id="minesResult" class="mode-result-banner mines-result-banner" style="text-align: center; font-size: 24px; font-weight: 800; padding: 20px;"></div>
                 </div>
                 
                 <div class="bet-panel">
@@ -1221,7 +1341,7 @@ function loadMinesGame(container) {
                         <input type="number" id="minesCount" class="bet-input" value="3" min="1" max="24">
                     </div>
                     
-                    <div id="minesMultiplier" style="text-align: center; font-size: 32px; font-weight: 900; color: var(--accent-success); margin: 20px 0;">1.00x</div>
+                    <div id="minesMultiplier" class="mode-multiplier-display mines-multiplier-display" style="text-align: center; font-size: 32px; font-weight: 900; color: var(--accent-success); margin: 20px 0;">1.00x</div>
                     
                     <button id="minesStartBtn" class="btn-primary" onclick="startMinesGame()">Start Game</button>
                     <button id="minesCashoutBtn" class="btn-danger" onclick="minesCashout()" style="display: none; margin-top: 12px;">Cash Out</button>
@@ -1333,12 +1453,14 @@ function revealMinesTile(index, tile) {
     tile.classList.add('revealed');
     
     if (minesPositions.includes(index)) {
-        tile.textContent = '💣';
+        tile.textContent = '\u{1F4A3}';
+        tile.classList.add('is-mine');
         tile.style.background = 'var(--accent-danger)';
         playGameSound('explode');
         minesGameEnd(false);
     } else {
-        tile.textContent = '💎';
+        tile.textContent = '\u{1F48E}';
+        tile.classList.add('is-safe');
         tile.style.background = 'var(--accent-success)';
         minesRevealed++;
         minesMultiplier = getMinesMultiplier(minesRevealed, minesCountActive);
@@ -1384,7 +1506,8 @@ async function minesGameEnd(won) {
         // Reveal all mines
         const tiles = document.querySelectorAll('.mines-tile');
         minesPositions.forEach(pos => {
-            tiles[pos].textContent = '💣';
+            tiles[pos].textContent = '\u{1F4A3}';
+            tiles[pos].classList.add('is-mine', 'is-muted-reveal');
             tiles[pos].style.background = 'rgba(239, 68, 68, 0.3)';
         });
     }
@@ -1396,13 +1519,13 @@ async function minesGameEnd(won) {
 // ===== DICE GAME =====
 function loadDiceGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container dice-game">
+            <div class="game-split-layout dice-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 60px; text-align: center;">
-                        <div id="diceResult" style="font-size: 120px; margin-bottom: 20px;">🎲</div>
-                        <div id="diceNumber" style="font-size: 48px; font-weight: 900; color: var(--accent-primary);">--</div>
-                        <div id="diceStatus" style="color: var(--text-secondary); margin-top: 20px; font-size: 18px;">Roll the dice!</div>
+                    <div class="dice-stage mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 60px; text-align: center;">
+                        <div id="diceResult" class="dice-result-icon mode-result-banner" style="font-size: 120px; margin-bottom: 20px;">&#x1F3B2;</div>
+                        <div id="diceNumber" class="mode-multiplier-display dice-number-display" style="font-size: 48px; font-weight: 900; color: var(--accent-primary);">--</div>
+                        <div id="diceStatus" class="mode-result-banner dice-status-banner" style="color: var(--text-secondary); margin-top: 20px; font-size: 18px;">Roll the dice!</div>
                     </div>
                 </div>
                 
@@ -1465,6 +1588,7 @@ async function rollDice() {
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
     }
+    playGameSound('bet-place');
     
     // Animate dice
     let rolls = 0;
@@ -1523,16 +1647,18 @@ async function finishDiceRoll(amount, rollOver) {
         document.getElementById('diceStatus').innerHTML = `
             <span style="color: var(--accent-success); font-weight: 800;">YOU WON! +$${formatAmount(payout - amount)}</span>
         `;
-        document.getElementById('diceResult').textContent = '🎉';
+        document.getElementById('diceResult').textContent = '\u{1F389}';
+        playGameSound('cashout');
     } else {
         document.getElementById('diceStatus').innerHTML = `
             <span style="color: var(--accent-danger); font-weight: 800;">YOU LOST! -$${formatAmount(amount)}</span>
         `;
-        document.getElementById('diceResult').textContent = '😢';
+        document.getElementById('diceResult').textContent = '\u{1F622}';
+        playGameSound('explode');
     }
     
     setTimeout(() => {
-        document.getElementById('diceResult').textContent = '🎲';
+        document.getElementById('diceResult').textContent = '\u{1F3B2}';
         document.getElementById('diceStatus').textContent = 'Roll the dice!';
     }, 3000);
     finishGameAction('dice');
@@ -2352,11 +2478,11 @@ async function dropPlinkoBall() {
 // Placeholder loaders for other games
 function loadTowersGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div>
-                    <div id="towersGrid" style="display: flex; flex-direction: column-reverse; gap: 12px;"></div>
-                    <div id="towersResult" style="text-align: center; font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
+        <div class="game-container towers-game">
+            <div class="game-split-layout towers-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="towers-stage mode-stage-card">
+                    <div id="towersGrid" class="towers-grid" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                    <div id="towersResult" class="mode-result-banner towers-result-banner" style="text-align: center; font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
                 </div>
                 
                 <div class="bet-panel">
@@ -2374,7 +2500,7 @@ function loadTowersGame(container) {
                         </select>
                     </div>
                     
-                    <div id="towersMultiplier" style="text-align: center; font-size: 32px; font-weight: 900; color: var(--accent-success); margin: 20px 0;">1.00x</div>
+                    <div id="towersMultiplier" class="mode-multiplier-display towers-multiplier-display" style="text-align: center; font-size: 32px; font-weight: 900; color: var(--accent-success); margin: 20px 0;">1.00x</div>
                     
                     <button id="towersStartBtn" class="btn-primary" onclick="startTowersGame()">Start Game</button>
                     <button id="towersCashoutBtn" class="btn-danger" onclick="towersCashout()" style="display: none; margin-top: 12px;">Cash Out</button>
@@ -2451,6 +2577,7 @@ function startTowersGame() {
     towersLevel = 0;
     towersMultiplier = 1.00;
     reserveDisplayedBalance(amount);
+    playGameSound('bet-place');
     
     // Generate safe tiles for each level
     const safeTilesCount = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1;
@@ -2477,26 +2604,31 @@ function selectTowersTile(level, index, tile) {
     tile.classList.add('revealed');
     
     if (towersSafeTiles[level].includes(index)) {
-        tile.textContent = '✨';
+        tile.textContent = '\u2728';
+        tile.classList.add('is-safe');
         tile.style.background = 'var(--accent-success)';
         tile.style.borderColor = 'var(--accent-success)';
         towersLevel++;
         towersMultiplier = 1 + (towersLevel * TOWERS_STEP_MULTIPLIER);
         document.getElementById('towersMultiplier').textContent = towersMultiplier.toFixed(2) + 'x';
+        playGameSound('reveal');
         
         if (towersLevel >= 8) {
             towersCashout();
         }
     } else {
-        tile.textContent = '💀';
+        tile.textContent = '\u{1F480}';
+        tile.classList.add('is-bust');
         tile.style.background = 'var(--accent-danger)';
         tile.style.borderColor = 'var(--accent-danger)';
+        playGameSound('explode');
         towersGameEnd(false);
     }
 }
 
 function towersCashout() {
     if (!towersGameActive) return;
+    playGameSound('cashout');
     towersGameEnd(true);
 }
 
@@ -2536,7 +2668,8 @@ async function towersGameEnd(won) {
             const level = parseInt(tile.dataset.level);
             const index = parseInt(tile.dataset.index);
             if (towersSafeTiles[level] && towersSafeTiles[level].includes(index)) {
-                tile.textContent = '✨';
+                tile.textContent = '\u2728';
+                tile.classList.add('is-safe-reveal');
                 tile.style.background = 'rgba(16, 185, 129, 0.2)';
             }
         });
@@ -2997,10 +3130,10 @@ function loadBlackjackGame(container) {
 }
 
 const BLACKJACK_SUIT_META = {
-    spades: { symbol: '♠', red: false },
-    hearts: { symbol: '♥', red: true },
-    diamonds: { symbol: '♦', red: true },
-    clubs: { symbol: '♣', red: false }
+    spades: { symbol: '\u2660', red: false },
+    hearts: { symbol: '\u2665', red: true },
+    diamonds: { symbol: '\u2666', red: true },
+    clubs: { symbol: '\u2663', red: false }
 };
 
 let blackjackDeck = [];
@@ -3307,27 +3440,27 @@ async function endBlackjack(result) {
 
 function loadSlotsGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container slots-game">
+            <div class="game-split-layout slots-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; text-align: center;">
-                        <div id="slotsReels" style="display: flex; justify-content: center; gap: 20px; margin-bottom: 30px;">
-                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">🍒</div>
-                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">🍒</div>
-                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">🍒</div>
+                    <div class="slots-stage mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; text-align: center;">
+                        <div id="slotsReels" class="slots-reels" style="display: flex; justify-content: center; gap: 20px; margin-bottom: 30px;">
+                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">${SLOT_SYMBOLS.cherry}</div>
+                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">${SLOT_SYMBOLS.cherry}</div>
+                            <div class="slot-reel" style="width: 120px; height: 150px; background: var(--bg-secondary); border: 3px solid var(--border-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 60px;">${SLOT_SYMBOLS.cherry}</div>
                         </div>
-                        <div id="slotsResult" style="font-size: 24px; font-weight: 800;"></div>
+                        <div id="slotsResult" class="mode-result-banner slots-result-banner" style="font-size: 24px; font-weight: 800;"></div>
                     </div>
                     
-                    <div style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                    <div class="slots-paytable mode-stage-card" style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
                         <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary);">PAYTABLE</div>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px;">
-                            <div>🍒🍒🍒 = 2x</div>
-                            <div>🍋🍋🍋 = 4x</div>
-                            <div>🍊🍊🍊 = 6x</div>
-                            <div>🍇🍇🍇 = 9x</div>
-                            <div>💎💎💎 = 14x</div>
-                            <div>7️⃣7️⃣7️⃣ = 24x</div>
+                            <div>${SLOT_SYMBOLS.cherry}${SLOT_SYMBOLS.cherry}${SLOT_SYMBOLS.cherry} = 2x</div>
+                            <div>${SLOT_SYMBOLS.lemon}${SLOT_SYMBOLS.lemon}${SLOT_SYMBOLS.lemon} = 4x</div>
+                            <div>${SLOT_SYMBOLS.orange}${SLOT_SYMBOLS.orange}${SLOT_SYMBOLS.orange} = 6x</div>
+                            <div>${SLOT_SYMBOLS.grape}${SLOT_SYMBOLS.grape}${SLOT_SYMBOLS.grape} = 9x</div>
+                            <div>${SLOT_SYMBOLS.diamond}${SLOT_SYMBOLS.diamond}${SLOT_SYMBOLS.diamond} = 14x</div>
+                            <div>${SLOT_SYMBOLS.seven}${SLOT_SYMBOLS.seven}${SLOT_SYMBOLS.seven} = 24x</div>
                         </div>
                     </div>
                 </div>
@@ -3369,10 +3502,18 @@ function spinSlots() {
     }
     
     reserveDisplayedBalance(amount);
+    playGameSound('bet-place');
+    playGameSound('spin-start');
     
-    const symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
+    const symbols = SLOT_SYMBOL_ORDER;
     const reels = document.querySelectorAll('.slot-reel');
     const results = [];
+
+    reels.forEach((reel, index) => {
+        reel.classList.remove('is-winning');
+        reel.classList.add('is-spinning');
+        reel.style.setProperty('--slot-order', String(index));
+    });
     
     // Spin animation
     let spins = 0;
@@ -3394,10 +3535,7 @@ function spinSlots() {
             
             // Check win
             if (results[0] === results[1] && results[1] === results[2]) {
-                const multipliers = {
-                    '🍒': 5, '🍋': 10, '🍊': 15, '🍇': 20, '💎': 50, '7️⃣': 100
-                };
-                const multiplier = Math.min(24, multipliers[results[0]] || 0);
+                const multiplier = SLOTS_PAYTABLE[results[0]] || 0;
                 const winAmount = amount * multiplier;
                 
                 const settlement = await settleWager({
@@ -3417,8 +3555,12 @@ function spinSlots() {
                     <span style="color: var(--accent-success);">JACKPOT! ${multiplier}x - +$${formatAmount(winAmount - amount)}</span>
                 `;
                 showNotification(`Jackpot! Won $${formatAmount(winAmount - amount)}`, 'success');
+                playGameSound('spin-stop');
+                playGameSound('cashout');
                 
                 reels.forEach(reel => {
+                    reel.classList.remove('is-spinning');
+                    reel.classList.add('is-winning');
                     reel.style.borderColor = 'var(--accent-success)';
                     reel.style.boxShadow = '0 0 30px var(--accent-success)';
                 });
@@ -3440,11 +3582,17 @@ function spinSlots() {
                     <span style="color: var(--accent-danger);">No match! -$${formatAmount(amount)}</span>
                 `;
                 showNotification(`Lost $${formatAmount(amount)}`, 'error');
+                playGameSound('spin-stop');
+                playGameSound('explode');
+                reels.forEach((reel) => {
+                    reel.classList.remove('is-spinning');
+                });
             }
             
             setTimeout(() => {
                 document.getElementById('slotsResult').textContent = '';
                 reels.forEach(reel => {
+                    reel.classList.remove('is-winning');
                     reel.style.borderColor = 'var(--border-color)';
                     reel.style.boxShadow = 'none';
                 });
@@ -3460,7 +3608,7 @@ function loadCoinflipGame(container) {
             <div class="responsive-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div class="coinflip-stage-card">
                     <div class="coinflip-stage">
-                        <div id="coinDisplay" class="coinflip-coin-display">🪙</div>
+                        <div id="coinDisplay" class="coinflip-coin-display">&#x1FA99;</div>
                         <div id="coinSidePill" class="coinflip-side-pill">Waiting for your call</div>
                         <div id="coinResult" style="font-size: 28px; font-weight: 900;"></div>
                     </div>
@@ -3476,14 +3624,14 @@ function loadCoinflipGame(container) {
                         <label class="bet-label">Choose Side</label>
                         <div class="coinflip-side-grid">
                             <button class="coinflip-side-btn is-heads" onclick="flipCoin('heads')" type="button">
-                                <div class="coinflip-side-icon">🙂</div>
+                                <div class="coinflip-side-icon">&#x1F451;</div>
                                 <div class="coinflip-side-copy">
                                     <strong>Heads</strong>
-                                    <span>Face side</span>
+                                    <span>Portrait side</span>
                                 </div>
                             </button>
                             <button class="coinflip-side-btn is-tails" onclick="flipCoin('tails')" type="button">
-                                <div class="coinflip-side-icon">🪶</div>
+                                <div class="coinflip-side-icon">&#x1F6E1;</div>
                                 <div class="coinflip-side-copy">
                                     <strong>Tails</strong>
                                     <span>Crest side</span>
@@ -3548,12 +3696,13 @@ async function flipCoin(choice) {
     if (sidePill) {
         sidePill.textContent = choice === 'heads' ? 'Heads called' : 'Tails called';
     }
+    playGameSound('coin-flip');
     
     // Flip animation
     let flips = 0;
     const flipInterval = setInterval(async () => {
         coin.style.transform = `rotateY(${flips * 180}deg)`;
-        coin.textContent = '🪙';
+        coin.textContent = '\u{1FA99}';
         if (sidePill) {
             sidePill.textContent = flips % 2 === 0 ? 'Heads side' : 'Tails side';
         }
@@ -3563,7 +3712,7 @@ async function flipCoin(choice) {
             clearInterval(flipInterval);
             
             const outcome = isBetaMode ? (Math.random() < 0.5 ? 'heads' : 'tails') : liveResult.resultSide;
-            coin.textContent = '🪙';
+            coin.textContent = '\u{1FA99}';
             if (sidePill) {
                 sidePill.textContent = outcome === 'heads' ? 'Heads landed' : 'Tails landed';
             }
@@ -3586,6 +3735,7 @@ async function flipCoin(choice) {
                 }
                 result.innerHTML = `<span style="color: var(--accent-success);">YOU WON! +$${formatAmount(winAmount - amount)}</span>`;
                 showNotification(`Won! +$${formatAmount(winAmount - amount)}`, 'success');
+                playGameSound('cashout');
             } else {
                 const settlement = isBetaMode
                     ? await settleWager({
@@ -3603,6 +3753,7 @@ async function flipCoin(choice) {
                 }
                 result.innerHTML = `<span style="color: var(--accent-danger);">YOU LOST! -$${formatAmount(amount)}</span>`;
                 showNotification(`Lost! -$${formatAmount(amount)}`, 'error');
+                playGameSound('explode');
             }
             
             setTimeout(() => {
@@ -3616,12 +3767,12 @@ async function flipCoin(choice) {
 
 function loadWheelGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container wheel-game">
+            <div class="game-split-layout wheel-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; text-align: center; position: relative;">
+                    <div class="wheel-stage-shell mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; text-align: center; position: relative;">
                         <canvas id="wheelCanvas" width="400" height="400" style="max-width: 100%;"></canvas>
-                        <div id="wheelResult" style="font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
+                        <div id="wheelResult" class="mode-result-banner wheel-result-banner" style="font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
                     </div>
                 </div>
                 
@@ -3835,6 +3986,7 @@ async function spinWheel() {
     const amount = readAmountInput('wheelBetAmount');
     const spinButton = document.getElementById('wheelSpinBtn');
     const riskSelect = document.getElementById('wheelRisk');
+    const wheelStage = document.querySelector('.wheel-stage-shell');
     const risk = riskSelect ? riskSelect.value : wheelCurrentRisk;
 
     if (wheelSpinning) {
@@ -3860,6 +4012,9 @@ async function spinWheel() {
     }
     
     wheelSpinning = true;
+    if (wheelStage) {
+        wheelStage.classList.add('is-spinning');
+    }
     spinButton.disabled = true;
     spinButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spinning...';
     riskSelect.disabled = true;
@@ -3882,6 +4037,9 @@ async function spinWheel() {
 
         if (!playResult) {
             wheelSpinning = false;
+            if (wheelStage) {
+                wheelStage.classList.remove('is-spinning');
+            }
             finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
             spinButton.disabled = false;
             spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
@@ -3932,6 +4090,9 @@ async function spinWheel() {
             
             if (!settlement) {
                 wheelSpinning = false;
+                if (wheelStage) {
+                    wheelStage.classList.remove('is-spinning');
+                }
                 finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
                 spinButton.disabled = false;
                 spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
@@ -3947,6 +4108,9 @@ async function spinWheel() {
             `;
             showNotification(`${multiplier}x - ${profit > 0 ? 'Won' : 'Lost'} $${formatAmount(Math.abs(profit))}`, profit > 0 ? 'success' : 'error');
             wheelSpinning = false;
+            if (wheelStage) {
+                wheelStage.classList.remove('is-spinning');
+            }
             finishGameAction('wheel', LONG_GAME_COOLDOWN_MS);
             spinButton.disabled = false;
             spinButton.innerHTML = '<i class="fas fa-sync-alt"></i> Spin Wheel';
@@ -3959,12 +4123,12 @@ async function spinWheel() {
 
 function loadLimboGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container limbo-game">
+            <div class="game-split-layout limbo-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 80px; text-align: center;">
-                        <div id="limboResult" style="font-size: 100px; font-weight: 900; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">0.00x</div>
-                        <div id="limboStatus" style="font-size: 20px; color: var(--text-secondary);">Set your target and play!</div>
+                    <div class="limbo-stage-shell mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 80px; text-align: center;">
+                        <div id="limboResult" class="mode-multiplier-display limbo-result-display" style="font-size: 100px; font-weight: 900; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">0.00x</div>
+                        <div id="limboStatus" class="mode-result-banner limbo-status-banner" style="font-size: 20px; color: var(--text-secondary);">Set your target and play!</div>
                     </div>
                 </div>
                 
@@ -4029,6 +4193,7 @@ async function playLimbo() {
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
     }
+    playGameSound('bet-place');
     
     document.getElementById('limboStatus').textContent = 'Rolling...';
     
@@ -4080,6 +4245,7 @@ async function playLimbo() {
                     <span style="color: var(--accent-success); font-weight: 800;">YOU WON! +$${formatAmount(winAmount - amount)}</span>
                 `;
                 showNotification(`Won! +$${formatAmount(winAmount - amount)}`, 'success');
+                playGameSound('cashout');
             } else {
                 const settlement = isBetaMode
                     ? await settleWager({
@@ -4099,6 +4265,7 @@ async function playLimbo() {
                     <span style="color: var(--accent-danger); font-weight: 800;">YOU LOST! -$${formatAmount(amount)}</span>
                 `;
                 showNotification(`Lost! -$${formatAmount(amount)}`, 'error');
+                playGameSound('explode');
             }
             
             setTimeout(() => {
@@ -4346,13 +4513,13 @@ async function joinJackpot() {
 
 function loadKenoGame(container) {
     container.innerHTML = `
-        <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+        <div class="game-container keno-game">
+            <div class="game-split-layout keno-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
                 <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 30px;">
+                    <div class="keno-stage mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 30px;">
                         <div id="kenoGrid" style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px;"></div>
                     </div>
-                    <div id="kenoResult" style="text-align: center; font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
+                    <div id="kenoResult" class="mode-result-banner keno-result-banner" style="text-align: center; font-size: 24px; font-weight: 800; margin-top: 20px;"></div>
                 </div>
                 
                 <div class="bet-panel">
@@ -4361,9 +4528,9 @@ function loadKenoGame(container) {
                         <input type="number" id="kenoBetAmount" class="bet-input" placeholder="0.00" min="1">
                     </div>
                     
-                    <div style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+                    <div class="keno-selected-card mode-stage-card" style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
                         <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">SELECTED NUMBERS</div>
-                        <div id="kenoSelected" style="font-size: 24px; font-weight: 900; color: var(--accent-primary);">0 / 10</div>
+                        <div id="kenoSelected" class="mode-multiplier-display keno-selected-display" style="font-size: 24px; font-weight: 900; color: var(--accent-primary);">0 / 10</div>
                     </div>
                     
                     <button class="btn-primary" onclick="playKeno()">
@@ -4373,7 +4540,7 @@ function loadKenoGame(container) {
                         <i class="fas fa-redo"></i> Clear Selection
                     </button>
                     
-                    <div style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-top: 16px; font-size: 12px;">
+                    <div class="keno-payout-card mode-stage-card" style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-top: 16px; font-size: 12px;">
                         <div style="font-weight: 700; margin-bottom: 8px; color: var(--text-secondary);">PAYOUTS</div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span>5 matches</span>
@@ -4439,10 +4606,12 @@ function createKenoGrid() {
 function toggleKenoNumber(number, tile) {
     if (kenoSelected.includes(number)) {
         kenoSelected = kenoSelected.filter(n => n !== number);
+        tile.classList.remove('is-selected', 'is-match', 'is-miss', 'is-drawn');
         tile.style.background = 'var(--bg-secondary)';
         tile.style.borderColor = 'var(--border-color)';
     } else if (kenoSelected.length < 10) {
         kenoSelected.push(number);
+        tile.classList.add('is-selected');
         tile.style.background = 'var(--accent-primary)';
         tile.style.borderColor = 'var(--accent-primary)';
     }
@@ -4482,6 +4651,7 @@ async function playKeno() {
     if (isBetaMode) {
         reserveDisplayedBalance(amount);
     }
+    playGameSound('bet-place');
     
     const drawn = [];
     let multiplier = 0;
@@ -4518,7 +4688,10 @@ async function playKeno() {
     const tiles = document.querySelectorAll('.keno-tile');
     tiles.forEach((tile, index) => {
         const number = index + 1;
+        tile.classList.remove('is-drawn', 'is-match', 'is-miss');
         if (drawn.includes(number)) {
+            tile.classList.add('is-drawn');
+            tile.classList.add(kenoSelected.includes(number) ? 'is-match' : 'is-miss');
             tile.style.background = kenoSelected.includes(number) ? 'var(--accent-success)' : 'var(--accent-danger)';
             tile.style.borderColor = kenoSelected.includes(number) ? 'var(--accent-success)' : 'var(--accent-danger)';
         }
@@ -4544,89 +4717,113 @@ async function playKeno() {
             <span style="color: var(--accent-success);">${matches} MATCHES! ${multiplier}x - +$${formatAmount(payout - amount)}</span>
         `;
         showNotification(`${matches} matches! Won $${formatAmount(payout - amount)}`, 'success');
+        playGameSound('cashout');
     } else {
         document.getElementById('kenoResult').innerHTML = `
             <span style="color: var(--accent-danger);">${matches} MATCHES - NO WIN</span>
         `;
         showNotification(`${matches} matches - Lost $${formatAmount(amount)}`, 'error');
+        playGameSound('explode');
     }
     finishGameAction('keno', LONG_GAME_COOLDOWN_MS);
 }
 
-function getSportsbookSelection() {
-    const fixture = SPORTSBOOK_SLATE.find((entry) => entry.id === sportsbookSelection.fixtureId) || SPORTSBOOK_SLATE[0];
-    const market = fixture.markets.find((entry) => entry.id === sportsbookSelection.marketId) || fixture.markets[0];
-    return { fixture, market };
+function loadSportsGame(container) {
+    loadChallengeMode(container, 'chickenroad');
 }
 
-function buildSportsbookFixtureCard(fixture, selectedMarketId) {
+function getChallengeModeConfig(gameKey = currentGame) {
+    return CHALLENGE_MODE_CONFIG[gameKey] || CHALLENGE_MODE_CONFIG.chickenroad;
+}
+
+function getChallengeSelection(gameKey = currentGame) {
+    const config = getChallengeModeConfig(gameKey);
+    const selectedPlanId = challengeModeSelections[gameKey] || config.plans[0]?.id;
+    const plan = config.plans.find((entry) => entry.id === selectedPlanId) || config.plans[0];
+
+    if (plan) {
+        challengeModeSelections[gameKey] = plan.id;
+    }
+
+    return { config, plan };
+}
+
+function buildChallengePlanCard(gameKey, plan, selectedPlanId) {
+    const config = getChallengeModeConfig(gameKey);
+
     return `
-        <article class="sports-fixture${fixture.id === sportsbookSelection.fixtureId ? ' is-active' : ''}">
+        <button
+            class="sports-fixture challenge-plan-card challenge-plan-card-${gameKey}${plan.id === selectedPlanId ? ' is-active' : ''}"
+            type="button"
+            data-challenge-mode="${gameKey}"
+            data-challenge-plan="${plan.id}"
+        >
             <div class="sports-fixture-head">
                 <div>
-                    <span class="sports-fixture-league">${fixture.sport} • ${fixture.league}</span>
-                    <strong>${fixture.home} vs ${fixture.away}</strong>
+                    <span class="sports-fixture-league">${config.kicker} lane</span>
+                    <strong>${plan.label}</strong>
                 </div>
-                <span class="sports-fixture-start">${fixture.start}</span>
+                <span class="sports-fixture-start">${plan.odds.toFixed(2)}x</span>
             </div>
-            <p class="sports-fixture-note">${fixture.note}</p>
-            <div class="sports-market-row">
-                ${fixture.markets.map((market) => `
-                    <button
-                        class="sports-market-btn${fixture.id === sportsbookSelection.fixtureId && market.id === selectedMarketId ? ' active' : ''}"
-                        type="button"
-                        data-sports-fixture="${fixture.id}"
-                        data-sports-market="${market.id}"
-                    >
-                        <span>${market.label}</span>
-                        <strong>${market.odds.toFixed(2)}x</strong>
-                    </button>
-                `).join('')}
+            <p class="sports-fixture-note">${plan.teaser}</p>
+            <div class="challenge-plan-grid">
+                <div class="sports-market-btn active">
+                    <span>${plan.metricLabel}</span>
+                    <strong>${plan.metricValue}</strong>
+                </div>
+                <div class="sports-market-btn active">
+                    <span>Ticket</span>
+                    <strong>${config.slipTitle}</strong>
+                </div>
+                <div class="sports-market-btn active">
+                    <span>Status</span>
+                    <strong>Select Plan</strong>
+                </div>
             </div>
-        </article>
+        </button>
     `;
 }
 
-function renderSportsbookSummary() {
+function renderChallengeModeSummary(gameKey = currentGame) {
     const feature = document.getElementById('sportsbookFeature');
     const selection = document.getElementById('sportsbookSelection');
     const payout = document.getElementById('sportsbookPotentialPayout');
     const stake = document.getElementById('sportsbookStakePreview');
-    const { fixture, market } = getSportsbookSelection();
+    const { config, plan } = getChallengeSelection(gameKey);
     const amount = Math.max(0, Number(readAmountInput('sportsbookBetAmount') || 0));
 
-    if (feature) {
+    if (feature && plan) {
         feature.innerHTML = `
-            <span class="sportsbook-kicker">${fixture.sport} • ${fixture.league}</span>
-            <h3>${fixture.home} vs ${fixture.away}</h3>
-            <p>${fixture.note}</p>
+            <span class="sportsbook-kicker">${config.kicker}</span>
+            <h3>${config.heroTitle}</h3>
+            <p>${config.heroCopy}</p>
             <div class="sportsbook-mini-grid">
                 <div class="sportsbook-mini-card">
-                    <span>Selected Side</span>
-                    <strong>${market.label}</strong>
+                    <span>Selected Plan</span>
+                    <strong>${plan.label}</strong>
                 </div>
                 <div class="sportsbook-mini-card">
                     <span>Price</span>
-                    <strong>${market.odds.toFixed(2)}x</strong>
+                    <strong>${plan.odds.toFixed(2)}x</strong>
                 </div>
                 <div class="sportsbook-mini-card">
-                    <span>Sim Status</span>
-                    <strong>${fixture.start}</strong>
+                    <span>${plan.metricLabel}</span>
+                    <strong>${plan.metricValue}</strong>
                 </div>
             </div>
         `;
     }
 
-    if (selection) {
+    if (selection && plan) {
         selection.innerHTML = `
-            <span class="sportsbook-slip-label">Selection</span>
-            <strong>${market.label}</strong>
-            <span>${fixture.home} vs ${fixture.away}</span>
+            <span class="sportsbook-slip-label">${config.slipTitle}</span>
+            <strong>${plan.label}</strong>
+            <span>${plan.teaser}</span>
         `;
     }
 
-    if (payout) {
-        payout.textContent = `$${formatAmount(amount * market.odds)}`;
+    if (payout && plan) {
+        payout.textContent = `$${formatAmount(amount * plan.odds)}`;
     }
 
     if (stake) {
@@ -4634,51 +4831,49 @@ function renderSportsbookSummary() {
     }
 }
 
-function updateSportsbookSelection(fixtureId, marketId) {
-    sportsbookSelection = { fixtureId, marketId };
+function updateChallengeSelection(gameKey, planId) {
+    const config = getChallengeModeConfig(gameKey);
+    const nextPlan = config.plans.find((entry) => entry.id === planId) || config.plans[0];
+    challengeModeSelections[gameKey] = nextPlan.id;
 
-    document.querySelectorAll('[data-sports-fixture][data-sports-market]').forEach((button) => {
-        const isActive = button.dataset.sportsFixture === fixtureId && button.dataset.sportsMarket === marketId;
-        button.classList.toggle('active', isActive);
+    document.querySelectorAll('[data-challenge-mode][data-challenge-plan]').forEach((button) => {
+        const isActive = button.dataset.challengeMode === gameKey && button.dataset.challengePlan === nextPlan.id;
+        button.classList.toggle('is-active', isActive);
     });
 
-    document.querySelectorAll('.sports-fixture').forEach((card) => {
-        const isActiveFixture = card.querySelector(`[data-sports-fixture="${fixtureId}"]`);
-        card.classList.toggle('is-active', !!isActiveFixture);
-    });
-
-    renderSportsbookSummary();
+    renderChallengeModeSummary(gameKey);
 }
 
-function renderSportsbookResult(payload = null) {
+function renderChallengeModeResult(payload = null, gameKey = currentGame) {
     const result = document.getElementById('sportsbookResult');
-    if (!result) {
+    const { config, plan } = getChallengeSelection(gameKey);
+    if (!result || !plan) {
         return;
     }
 
-    if (!payload || !payload.sportsbook) {
+    const summary = payload?.meta?.challengeMode || payload?.challengeMode || null;
+    if (!summary) {
         result.innerHTML = `
-            <div class="sportsbook-result-card">
-                <span class="sportsbook-result-kicker">Bot Sim Ready</span>
-                <strong>Select a market, enter a stake, and run the sim.</strong>
-                <p>These are server-resolved bot matchups, so the ticket, wallet, and live feed all stay in sync.</p>
+            <div class="sportsbook-result-card challenge-result-card">
+                <span class="sportsbook-result-kicker">${config.kicker}</span>
+                <strong>${config.title} is loaded and ready.</strong>
+                <p>${config.note}</p>
             </div>
         `;
         return;
     }
 
-    const summary = payload.sportsbook;
-    const profit = Number(payload.profit || 0);
+    const profit = Number(payload.payout || 0) - Number(payload.amount || 0);
     const won = !!payload.won;
 
     result.innerHTML = `
-        <div class="sportsbook-result-card ${won ? 'win' : 'loss'}">
-            <span class="sportsbook-result-kicker">${won ? 'Ticket Cashed' : 'Ticket Missed'}</span>
-            <strong>${summary.scoreline}</strong>
+        <div class="sportsbook-result-card challenge-result-card ${won ? 'win' : 'loss'}">
+            <span class="sportsbook-result-kicker">${won ? 'Ticket Cashed' : 'Ticket Burned'}</span>
+            <strong>${summary.resultLine}</strong>
             <p>${summary.headline} ${summary.detail}</p>
             <div class="sportsbook-result-grid">
                 <div>
-                    <span>Slip</span>
+                    <span>Plan</span>
                     <strong>${summary.selection}</strong>
                 </div>
                 <div>
@@ -4687,37 +4882,38 @@ function renderSportsbookResult(payload = null) {
                 </div>
                 <div>
                     <span>Result</span>
-                    <strong>${profit >= 0 ? '+' : ''}$${formatAmount(profit)}</strong>
+                    <strong>${profit >= 0 ? '+' : '-'}$${formatAmount(Math.abs(profit))}</strong>
                 </div>
             </div>
         </div>
     `;
 }
 
-async function placeSportsbookBet() {
-    if (!startGameAction('sports', LONG_GAME_COOLDOWN_MS)) {
+async function placeChallengeModeBet(gameKey = currentGame) {
+    if (!startGameAction(gameKey, LONG_GAME_COOLDOWN_MS)) {
         return;
     }
 
     const amount = readAmountInput('sportsbookBetAmount');
-    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Sports bet')) {
-        finishGameAction('sports', 250);
+    const { config, plan } = getChallengeSelection(gameKey);
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, `${config.title} bet`)) {
+        finishGameAction(gameKey, 250);
         return;
     }
 
     const button = document.getElementById('sportsbookPlaceBet');
-    const { fixture, market } = getSportsbookSelection();
     if (button) {
         button.disabled = true;
     }
 
+    playGameSound('bet-place');
+
     try {
         const data = await window.playServerGame({
-            gameType: 'sports',
+            gameType: gameKey,
             amount,
             payload: {
-                fixtureId: fixture.id,
-                marketId: market.id
+                planId: plan.id
             }
         });
 
@@ -4725,36 +4921,39 @@ async function placeSportsbookBet() {
             return;
         }
 
-        renderSportsbookResult(data);
+        renderChallengeModeResult(data, gameKey);
+        playGameSound(data.won ? 'cashout' : 'explode');
         showNotification(
             data.won
-                ? `${market.label} cleared at ${market.odds.toFixed(2)}x.`
-                : `${market.label} got clipped on the close.`,
+                ? `${plan.label} landed at ${plan.odds.toFixed(2)}x.`
+                : `${plan.label} missed this run.`,
             data.won ? 'success' : 'error'
         );
     } finally {
         if (button) {
             button.disabled = false;
         }
-        finishGameAction('sports', LONG_GAME_COOLDOWN_MS);
+        finishGameAction(gameKey, LONG_GAME_COOLDOWN_MS);
     }
 }
 
-function loadSportsGame(container) {
+function loadChallengeMode(container, gameKey) {
+    const { config, plan } = getChallengeSelection(gameKey);
+
     container.innerHTML = `
-        <div class="game-container sportsbook-game">
+        <div class="game-container sportsbook-game challenge-mode-shell challenge-mode-${gameKey}">
             <div class="responsive-grid sportsbook-layout" data-desktop-columns="minmax(0, 1.5fr) minmax(320px, 0.85fr)">
                 <section class="sportsbook-board">
-                    <div class="sportsbook-hero" id="sportsbookFeature"></div>
-                    <div class="sportsbook-ticket-wall">
-                        ${SPORTSBOOK_SLATE.map((fixture) => buildSportsbookFixtureCard(fixture, sportsbookSelection.marketId)).join('')}
+                    <div class="sportsbook-hero challenge-mode-hero" id="sportsbookFeature"></div>
+                    <div class="sportsbook-ticket-wall challenge-plan-wall">
+                        ${config.plans.map((entry) => buildChallengePlanCard(gameKey, entry, plan.id)).join('')}
                     </div>
                 </section>
 
-                <aside class="sportsbook-slip">
+                <aside class="sportsbook-slip challenge-mode-slip">
                     <div class="sportsbook-slip-header">
-                        <span class="sportsbook-slip-kicker">Bet Slip</span>
-                        <strong>Single Sim Ticket</strong>
+                        <span class="sportsbook-slip-kicker">${config.slipTitle}</span>
+                        <strong>Single Run Ticket</strong>
                     </div>
 
                     <div class="sportsbook-selection" id="sportsbookSelection"></div>
@@ -4765,10 +4964,10 @@ function loadSportsGame(container) {
                     </label>
 
                     <div class="quick-bets sportsbook-quick-bets">
-                        <button class="quick-bet-btn" type="button" data-sports-amount="1000000">1M</button>
-                        <button class="quick-bet-btn" type="button" data-sports-amount="10000000">10M</button>
-                        <button class="quick-bet-btn" type="button" data-sports-amount="100000000">100M</button>
-                        <button class="quick-bet-btn" type="button" data-sports-amount="max">MAX</button>
+                        <button class="quick-bet-btn" type="button" data-challenge-amount="1000000">1M</button>
+                        <button class="quick-bet-btn" type="button" data-challenge-amount="10000000">10M</button>
+                        <button class="quick-bet-btn" type="button" data-challenge-amount="100000000">100M</button>
+                        <button class="quick-bet-btn" type="button" data-challenge-amount="max">MAX</button>
                     </div>
 
                     <div class="sportsbook-slip-metrics">
@@ -4783,11 +4982,11 @@ function loadSportsGame(container) {
                     </div>
 
                     <button id="sportsbookPlaceBet" class="btn-primary" type="button">
-                        <i class="fas fa-ticket"></i> Run Sim
+                        <i class="fas fa-bolt"></i> Send Run
                     </button>
 
                     <div class="sportsbook-note">
-                        Bot sports resolve on the server so the slip, wallet, and live feed stay in sync.
+                        ${config.note}
                     </div>
 
                     <div id="sportsbookResult" class="sportsbook-result"></div>
@@ -4799,37 +4998,52 @@ function loadSportsGame(container) {
     const input = document.getElementById('sportsbookBetAmount');
     const button = document.getElementById('sportsbookPlaceBet');
 
-    container.querySelectorAll('[data-sports-fixture][data-sports-market]').forEach((marketButton) => {
-        marketButton.addEventListener('click', () => {
-            updateSportsbookSelection(marketButton.dataset.sportsFixture, marketButton.dataset.sportsMarket);
+    container.querySelectorAll('[data-challenge-mode][data-challenge-plan]').forEach((planButton) => {
+        planButton.addEventListener('click', () => {
+            playGameSound('toggle-on');
+            updateChallengeSelection(planButton.dataset.challengeMode, planButton.dataset.challengePlan);
         });
     });
 
-    container.querySelectorAll('[data-sports-amount]').forEach((quickButton) => {
+    container.querySelectorAll('[data-challenge-amount]').forEach((quickButton) => {
         quickButton.addEventListener('click', () => {
-            const rawValue = quickButton.dataset.sportsAmount;
+            const rawValue = quickButton.dataset.challengeAmount;
             const quickAmount = rawValue === 'max'
                 ? Math.floor(Number(currentPlayer?.balance || 0))
                 : Number(rawValue);
             if (!Number.isFinite(quickAmount) || quickAmount <= 0) {
                 return;
             }
+
             window.setAmountInputValue('sportsbookBetAmount', quickAmount);
-            renderSportsbookSummary();
+            playGameSound('toggle-on');
+            renderChallengeModeSummary(gameKey);
         });
     });
 
     if (input) {
-        input.addEventListener('input', renderSportsbookSummary);
-        input.addEventListener('blur', renderSportsbookSummary);
+        input.addEventListener('input', () => renderChallengeModeSummary(gameKey));
+        input.addEventListener('blur', () => renderChallengeModeSummary(gameKey));
     }
 
     if (button) {
-        button.addEventListener('click', placeSportsbookBet);
+        button.addEventListener('click', () => placeChallengeModeBet(gameKey));
     }
 
-    renderSportsbookSummary();
-    renderSportsbookResult();
+    renderChallengeModeSummary(gameKey);
+    renderChallengeModeResult(null, gameKey);
+}
+
+function loadChickenroadGame(container) {
+    loadChallengeMode(container, 'chickenroad');
+}
+
+function loadSafecrackerGame(container) {
+    loadChallengeMode(container, 'safecracker');
+}
+
+function loadWirecutGame(container) {
+    loadChallengeMode(container, 'wirecut');
 }
 
 window.handleCrashRealtimeState = handleCrashRealtimeState;

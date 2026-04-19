@@ -18,9 +18,9 @@
             <div class="login-shell">
                 <div class="login-story">
                     <div class="story-kicker">BingungSMP Gamble</div>
-                    <h1 class="story-title">One sharper floor. One louder sportsbook.</h1>
+                    <h1 class="story-title">One sharper floor. One louder action room.</h1>
                     <p class="story-copy">
-                        Login with your in-game code, jump from casino tables into the sports board,
+                        Login with your in-game code, jump from table to table,
                         and keep your wallet, level, chat, and live feed moving from one control room.
                     </p>
 
@@ -53,7 +53,7 @@
 
                     <div class="login-headline">
                         <h2>Open your action room</h2>
-                        <p>Use the 6-digit code from Minecraft to unlock your live wallet and sportsbook slip.</p>
+                        <p>Use the 6-digit code from Minecraft to unlock your live wallet and every table on the floor.</p>
                     </div>
 
                     <form id="loginForm" class="login-form">
@@ -107,16 +107,19 @@
                             </div>
                         </div>
 
-                        <div class="sidebar-balance">
-                            <span class="sidebar-balance-label">Website Wallet</span>
+                        <button id="sidebarBalanceCard" class="sidebar-balance sidebar-balance-btn" type="button">
+                            <span class="sidebar-balance-label">&#x1F4B5; Website Wallet</span>
                             <strong id="sidebarBalance">$0.00</strong>
-                        </div>
+                            <small>Open wallet hub</small>
+                        </button>
                     </div>
 
                     <nav class="sidebar-nav">
                         <div class="nav-section">
-                            <span class="nav-label">Sportsbook</span>
-                            <a href="#" class="nav-item" data-game="sports"><i class="fas fa-trophy"></i><span>Sports</span></a>
+                            <span class="nav-label">Challenge Modes</span>
+                            <a href="#" class="nav-item" data-game="chickenroad"><i class="fas fa-drumstick-bite"></i><span>Chicken Crossing</span></a>
+                            <a href="#" class="nav-item" data-game="safecracker"><i class="fas fa-key"></i><span>Safecracker</span></a>
+                            <a href="#" class="nav-item" data-game="wirecut"><i class="fas fa-bomb"></i><span>Wire Cut</span></a>
                         </div>
 
                         <div class="nav-section">
@@ -163,24 +166,46 @@
                             <p id="gameDescription">Ride the multiplier, bank in time, and keep the streak alive.</p>
                         </div>
 
+                        <button id="topbarWalletCard" class="topbar-wallet-core" type="button">
+                            <span class="topbar-wallet-kicker">&#x1F4B8; Website Wallet</span>
+                            <strong id="userBalance">$0.00</strong>
+                            <span class="topbar-wallet-subtext">Tap to open wallet + profile hub</span>
+                        </button>
+
                         <div class="topbar-actions">
-                            <div class="network-pill">
-                                <span class="network-pill-label">Players Online</span>
-                                <strong id="topbarOnlinePlayers">0</strong>
+                            <div class="network-pill online-presence-card" id="topbarOnlineCard" tabindex="0">
+                                <span class="network-pill-symbol">&#x1F465;</span>
+                                <div class="network-pill-copy">
+                                    <span class="network-pill-label">Online</span>
+                                    <strong id="topbarOnlinePlayers">0</strong>
+                                    <small>Hover to see who is on</small>
+                                </div>
+                                <div class="online-presence-popover">
+                                    <div class="online-presence-head">
+                                        <strong>Players on the website</strong>
+                                        <span id="chatPresenceSummary">0 online now</span>
+                                    </div>
+                                    <div id="topbarOnlineList" class="online-presence-list"></div>
+                                </div>
                             </div>
 
-                            <div class="user-balance">
-                                <span class="balance-label">Wallet</span>
-                                <strong id="userBalance">$0.00</strong>
+                            <div class="network-pill network-pill-compact">
+                                <span class="network-pill-symbol">&#x1F7E2;</span>
+                                <div class="network-pill-copy">
+                                    <span class="network-pill-label">Floor Sync</span>
+                                    <strong id="liveFeedStatus">synced</strong>
+                                    <small>Live updates active</small>
+                                </div>
                             </div>
 
-                            <div class="user-profile">
+                            <button id="userProfileCard" class="user-profile topbar-profile-button" type="button">
                                 <img id="userSkin" src="https://mc-heads.net/avatar/Steve/48" alt="Player skin" class="user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
                                 <div class="user-info">
                                     <span id="userName" class="user-name">Player</span>
                                     <span id="userLevel" class="user-level">Level 1</span>
                                 </div>
-                            </div>
+                                <span class="user-profile-hint">Open Profile</span>
+                            </button>
 
                             <button id="logoutBtn" class="btn-logout" type="button" aria-label="Logout">
                                 <i class="fas fa-right-from-bracket"></i>
@@ -189,6 +214,42 @@
                     </header>
 
                     <div class="game-wrapper">
+                        <aside class="chat-sidebar live-sidebar">
+                            <div class="live-header">
+                                <div>
+                                    <span class="live-label">Live Chat</span>
+                                    <strong>Lobby talk</strong>
+                                </div>
+                                <span class="live-status">fast lane</span>
+                            </div>
+
+                            <section class="chat-panel">
+                                <div class="feed-block-header">
+                                    <div>
+                                        <strong>Lobby Chat</strong>
+                                        <span>Reply, tip, and react from here</span>
+                                    </div>
+                                    <div class="feed-header-tools">
+                                        <span class="chat-inline-note">Quick replies stay pinned</span>
+                                    </div>
+                                </div>
+                                <div id="liveChatMessages" class="live-chat-messages"></div>
+                                <form id="liveChatForm" class="live-chat-form">
+                                    <img id="chatUserAvatar" src="https://mc-heads.net/avatar/Steve/48" alt="Chat avatar" class="chat-user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
+                                    <input id="liveChatInput" type="text" class="chat-input" maxlength="220" placeholder="Send a table call to the lobby">
+                                    <button class="btn-primary chat-send-btn" type="submit">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </form>
+                                <div class="chat-quick-replies" id="chatQuickReplies">
+                                    <button type="button" class="chat-chip" data-chat-reply="gl all">GL ALL</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="nice hit">NICE HIT</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="bot sold me">BOT SOLD ME</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="banker lowball">BANKER LOWBALL</button>
+                                </div>
+                            </section>
+                        </aside>
+
                         <section class="game-stage">
                             <div class="stage-header">
                                 <div>
@@ -204,48 +265,48 @@
                             </div>
                         </section>
 
-                        <aside class="live-sidebar">
+                        <aside class="feed-sidebar live-sidebar">
                             <div class="live-header">
                                 <div>
                                     <span class="live-label">Floor Feed</span>
                                     <strong>Hot action</strong>
                                 </div>
-                                <span class="live-status" id="liveFeedStatus">synced</span>
+                                <span class="live-status">watchlist</span>
                             </div>
-                            <div class="floor-pulse-card">
+                            <button id="floorPulseCard" class="floor-pulse-card feed-focus-card" type="button">
                                 <div>
-                                    <span class="summary-label">Floor Pulse</span>
+                                    <span class="summary-label">&#x1F39B; Floor Pulse</span>
                                     <strong id="summaryGlobalBets">0 bets</strong>
-                                    <p id="betFeedInsight">Fresh slips, live chat, and bot sims all pulse from here.</p>
+                                    <p id="betFeedInsight">Fresh slips, live chat, and every wallet move pulse from here.</p>
                                 </div>
                                 <div class="pulse-metrics">
                                     <div class="pulse-metric">
-                                        <span>Win Rate</span>
+                                        <span>&#x26A1; Win Rate</span>
                                         <strong id="summaryWinRate">0%</strong>
                                     </div>
                                     <div class="pulse-metric">
-                                        <span>Net Flow</span>
+                                        <span>&#x1F4B9; Net Flow</span>
                                         <strong id="summaryNetProfit">$0.00</strong>
                                     </div>
                                 </div>
-                            </div>
+                            </button>
                             <div class="realtime-summary">
-                                <div class="summary-tile">
-                                    <span class="summary-label">Players</span>
+                                <button id="summaryTileOnline" class="summary-tile summary-action-card" type="button" data-summary-action="online">
+                                    <span class="summary-label">&#x1F465; Online</span>
                                     <strong id="summaryOnlinePlayers">0</strong>
-                                </div>
-                                <div class="summary-tile">
-                                    <span class="summary-label">Global Wins</span>
+                                </button>
+                                <button id="summaryTileWins" class="summary-tile summary-action-card" type="button" data-summary-action="wins">
+                                    <span class="summary-label">&#x1F3C6; Global Wins</span>
                                     <strong id="summaryGlobalWins">0</strong>
-                                </div>
-                                <div class="summary-tile">
-                                    <span class="summary-label">Global Losses</span>
+                                </button>
+                                <button id="summaryTileLosses" class="summary-tile summary-action-card" type="button" data-summary-action="losses">
+                                    <span class="summary-label">&#x1F9E8; Global Losses</span>
                                     <strong id="summaryGlobalLosses">0</strong>
-                                </div>
-                                <div class="summary-tile">
-                                    <span class="summary-label">Volume</span>
+                                </button>
+                                <button id="summaryTileVolume" class="summary-tile summary-action-card" type="button" data-summary-action="all">
+                                    <span class="summary-label">&#x1F4B0; Volume</span>
                                     <strong id="summaryGlobalVolume">$0.00</strong>
-                                </div>
+                                </button>
                             </div>
 
                             <div class="feed-block">
@@ -265,32 +326,6 @@
                                 </div>
                                 <div id="liveBets" class="live-bets"></div>
                             </div>
-
-                            <section class="chat-panel">
-                                <div class="feed-block-header">
-                                    <div>
-                                        <strong>Lobby Chat</strong>
-                                        <span id="chatPresenceSummary">0 online now</span>
-                                    </div>
-                                    <div class="feed-header-tools">
-                                        <span class="chat-inline-note">Tips and quick replies live here</span>
-                                    </div>
-                                </div>
-                                <div id="liveChatMessages" class="live-chat-messages"></div>
-                                <form id="liveChatForm" class="live-chat-form">
-                                    <img id="chatUserAvatar" src="https://mc-heads.net/avatar/Steve/48" alt="Chat avatar" class="chat-user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
-                                    <input id="liveChatInput" type="text" class="chat-input" maxlength="220" placeholder="Send a table call to the lobby">
-                                    <button class="btn-primary chat-send-btn" type="submit">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
-                                </form>
-                                <div class="chat-quick-replies" id="chatQuickReplies">
-                                    <button type="button" class="chat-chip" data-chat-reply="gl all">GL ALL</button>
-                                    <button type="button" class="chat-chip" data-chat-reply="nice hit">NICE HIT</button>
-                                    <button type="button" class="chat-chip" data-chat-reply="bot sold me">BOT SOLD ME</button>
-                                    <button type="button" class="chat-chip" data-chat-reply="banker lowball">BANKER LOWBALL</button>
-                                </div>
-                            </section>
                         </aside>
                     </div>
                 </main>
