@@ -33,6 +33,14 @@ const GAME_META = {
         description: 'Ride the multiplier, bank in time, and keep the streak alive.',
         icon: 'fa-rocket'
     },
+    sports: {
+        title: 'Sports',
+        eyebrow: 'Bet Slip',
+        chip: 'Live Board',
+        stage: 'Sportsbook Lounge',
+        description: 'Pick your side, lock the ticket, and sweat live-style markets across basketball, football, tennis, and esports.',
+        icon: 'fa-trophy'
+    },
     mines: {
         title: 'Mines',
         eyebrow: 'Treasure Grid',
@@ -372,10 +380,16 @@ function enhanceAmountInputs(scope = document) {
 }
 
 function initializeSoundPreference() {
-    soundEnabled = true;
+    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const lowCoreDevice = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+    soundEnabled = !prefersReducedMotion && !lowCoreDevice;
 }
 
 function setupGlobalClickAudio() {
+    if (!soundEnabled) {
+        return;
+    }
+
     const playClickTone = (event) => {
         if (!soundEnabled) return;
         if (!event.target.closest('#app, .modal.active, #notificationStack')) return;
@@ -403,6 +417,10 @@ function setupGlobalClickAudio() {
 }
 
 function unlockAudioOnInteraction() {
+    if (!soundEnabled) {
+        return;
+    }
+
     const unlock = async () => {
         await ensureAudioContext();
         document.removeEventListener('pointerdown', unlock);
@@ -602,11 +620,11 @@ async function playUiSound(kind = 'info') {
 function getNotificationMeta(type) {
     switch (type) {
         case 'success':
-            return { icon: 'fa-circle-check', label: 'Success' };
+            return { icon: 'fa-circle-check', label: 'Ticket Cashed' };
         case 'error':
-            return { icon: 'fa-circle-exclamation', label: 'Alert' };
+            return { icon: 'fa-circle-exclamation', label: 'Pit Alert' };
         default:
-            return { icon: 'fa-bell', label: 'Update' };
+            return { icon: 'fa-bell', label: 'Floor Pulse' };
     }
 }
 
@@ -941,7 +959,7 @@ function renderProvablyFairPanel() {
     const state = provablyFairState || normalizeProvablyFairState();
     const supportedGames = state.supportedGames.length > 0
         ? state.supportedGames.filter((game) => game !== 'cases').join(', ')
-        : 'cases, dice, plinko, roulette, coinflip, wheel, limbo';
+        : 'cases, sports, dice, plinko, roulette, coinflip, wheel, limbo';
     const shortHash = state.serverSeedHash.length > 20
         ? `${state.serverSeedHash.slice(0, 12)}...${state.serverSeedHash.slice(-6)}`
         : state.serverSeedHash;
@@ -1231,14 +1249,14 @@ function refreshLiveChatAvailability() {
     input.disabled = !enabled;
     input.readOnly = !enabled;
     input.placeholder = enabled
-        ? 'Talk to players on the website'
-        : (loggedIn ? 'Realtime chat is reconnecting...' : 'Login to join website chat');
+        ? 'Send a table call to the lobby'
+        : (loggedIn ? 'Lobby chat is reconnecting...' : 'Login to join lobby chat');
 
     if (submitButton) {
         submitButton.disabled = !enabled;
         submitButton.title = enabled
-            ? 'Send chat message'
-            : (loggedIn ? 'Realtime chat is reconnecting' : 'Website chat requires a real login');
+            ? 'Send lobby message'
+            : (loggedIn ? 'Lobby chat is reconnecting' : 'Lobby chat requires a real login');
     }
 }
 
@@ -2189,11 +2207,11 @@ async function loadRecentBets() {
         if (data.success && data.bets.length > 0) {
             data.bets.forEach((bet) => addLiveBet(bet, false));
         } else {
-            container.innerHTML = '<div class="feed-empty-state">Waiting for real wagers...</div>';
+            container.innerHTML = '<div class="feed-empty-state">No slips punched yet. The first ticket sets the tone.</div>';
         }
     } catch (error) {
         console.error('Failed to load recent bets:', error);
-        container.innerHTML = '<div class="feed-empty-state">Realtime bets are reconnecting...</div>';
+        container.innerHTML = '<div class="feed-empty-state">The feed is syncing back in.</div>';
     }
 }
 

@@ -125,6 +125,68 @@ const SLOTS_PAYTABLE = {
 };
 const GAME_ACTION_BUSY = new Set();
 const GAME_ACTION_COOLDOWNS = new Map();
+const SPORTSBOOK_SLATE = [
+    {
+        id: 'night-run',
+        sport: 'Basketball',
+        league: 'Night Run League',
+        home: 'Metro Owls',
+        away: 'Neon Vipers',
+        start: 'Live 4Q 06:14',
+        note: 'Fast pace, fast close, loud total.',
+        markets: [
+            { id: 'home', label: 'Metro Owls', odds: 1.84 },
+            { id: 'away', label: 'Neon Vipers', odds: 2.02 },
+            { id: 'over', label: 'Over 214.5', odds: 1.96 }
+        ]
+    },
+    {
+        id: 'harbor-clash',
+        sport: 'Football',
+        league: 'Harbor Premier',
+        home: 'Harbor FC',
+        away: 'Goldcrest United',
+        start: 'Today 21:30',
+        note: 'Tighter price, late-goal energy.',
+        markets: [
+            { id: 'home', label: 'Harbor FC', odds: 2.1 },
+            { id: 'away', label: 'Goldcrest United', odds: 2.62 },
+            { id: 'over', label: 'Over 2.5', odds: 2.04 }
+        ]
+    },
+    {
+        id: 'court-royal',
+        sport: 'Tennis',
+        league: 'Royal Indoor',
+        home: 'Mika Stone',
+        away: 'Rian Vale',
+        start: 'Tonight 23:10',
+        note: 'Serve-heavy matchup with a live dog.',
+        markets: [
+            { id: 'home', label: 'Mika Stone', odds: 1.72 },
+            { id: 'away', label: 'Rian Vale', odds: 2.34 },
+            { id: 'over', label: 'Over 2.5 sets', odds: 2.48 }
+        ]
+    },
+    {
+        id: 'rift-rush',
+        sport: 'Esports',
+        league: 'Rift Rush Series',
+        home: 'Ghost Signal',
+        away: 'Nova Pulse',
+        start: 'Live Map Draft',
+        note: 'Momentum flips hard after first blood.',
+        markets: [
+            { id: 'home', label: 'Ghost Signal', odds: 1.9 },
+            { id: 'away', label: 'Nova Pulse', odds: 1.98 },
+            { id: 'over', label: 'Over 2.5 maps', odds: 2.18 }
+        ]
+    }
+];
+let sportsbookSelection = {
+    fixtureId: SPORTSBOOK_SLATE[0].id,
+    marketId: SPORTSBOOK_SLATE[0].markets[0].id
+};
 
 function clampMultiplier(value, maxMultiplier) {
     const parsed = Number(value);
@@ -4164,6 +4226,285 @@ async function playKeno() {
         showNotification(`${matches} matches - Lost $${formatAmount(amount)}`, 'error');
     }
     finishGameAction('keno', LONG_GAME_COOLDOWN_MS);
+}
+
+function getSportsbookSelection() {
+    const fixture = SPORTSBOOK_SLATE.find((entry) => entry.id === sportsbookSelection.fixtureId) || SPORTSBOOK_SLATE[0];
+    const market = fixture.markets.find((entry) => entry.id === sportsbookSelection.marketId) || fixture.markets[0];
+    return { fixture, market };
+}
+
+function buildSportsbookFixtureCard(fixture, selectedMarketId) {
+    return `
+        <article class="sports-fixture${fixture.id === sportsbookSelection.fixtureId ? ' is-active' : ''}">
+            <div class="sports-fixture-head">
+                <div>
+                    <span class="sports-fixture-league">${fixture.sport} • ${fixture.league}</span>
+                    <strong>${fixture.home} vs ${fixture.away}</strong>
+                </div>
+                <span class="sports-fixture-start">${fixture.start}</span>
+            </div>
+            <p class="sports-fixture-note">${fixture.note}</p>
+            <div class="sports-market-row">
+                ${fixture.markets.map((market) => `
+                    <button
+                        class="sports-market-btn${fixture.id === sportsbookSelection.fixtureId && market.id === selectedMarketId ? ' active' : ''}"
+                        type="button"
+                        data-sports-fixture="${fixture.id}"
+                        data-sports-market="${market.id}"
+                    >
+                        <span>${market.label}</span>
+                        <strong>${market.odds.toFixed(2)}x</strong>
+                    </button>
+                `).join('')}
+            </div>
+        </article>
+    `;
+}
+
+function renderSportsbookSummary() {
+    const feature = document.getElementById('sportsbookFeature');
+    const selection = document.getElementById('sportsbookSelection');
+    const payout = document.getElementById('sportsbookPotentialPayout');
+    const stake = document.getElementById('sportsbookStakePreview');
+    const { fixture, market } = getSportsbookSelection();
+    const amount = Math.max(0, Number(readAmountInput('sportsbookBetAmount') || 0));
+
+    if (feature) {
+        feature.innerHTML = `
+            <span class="sportsbook-kicker">${fixture.sport} • ${fixture.league}</span>
+            <h3>${fixture.home} vs ${fixture.away}</h3>
+            <p>${fixture.note}</p>
+            <div class="sportsbook-mini-grid">
+                <div class="sportsbook-mini-card">
+                    <span>Selected Side</span>
+                    <strong>${market.label}</strong>
+                </div>
+                <div class="sportsbook-mini-card">
+                    <span>Price</span>
+                    <strong>${market.odds.toFixed(2)}x</strong>
+                </div>
+                <div class="sportsbook-mini-card">
+                    <span>Start</span>
+                    <strong>${fixture.start}</strong>
+                </div>
+            </div>
+        `;
+    }
+
+    if (selection) {
+        selection.innerHTML = `
+            <span class="sportsbook-slip-label">Selection</span>
+            <strong>${market.label}</strong>
+            <span>${fixture.home} vs ${fixture.away}</span>
+        `;
+    }
+
+    if (payout) {
+        payout.textContent = `$${formatAmount(amount * market.odds)}`;
+    }
+
+    if (stake) {
+        stake.textContent = amount > 0 ? `$${formatAmount(amount)}` : '$0.00';
+    }
+}
+
+function updateSportsbookSelection(fixtureId, marketId) {
+    sportsbookSelection = { fixtureId, marketId };
+
+    document.querySelectorAll('[data-sports-fixture][data-sports-market]').forEach((button) => {
+        const isActive = button.dataset.sportsFixture === fixtureId && button.dataset.sportsMarket === marketId;
+        button.classList.toggle('active', isActive);
+    });
+
+    document.querySelectorAll('.sports-fixture').forEach((card) => {
+        const isActiveFixture = card.querySelector(`[data-sports-fixture="${fixtureId}"]`);
+        card.classList.toggle('is-active', !!isActiveFixture);
+    });
+
+    renderSportsbookSummary();
+}
+
+function renderSportsbookResult(payload = null) {
+    const result = document.getElementById('sportsbookResult');
+    if (!result) {
+        return;
+    }
+
+    if (!payload || !payload.sportsbook) {
+        result.innerHTML = `
+            <div class="sportsbook-result-card">
+                <span class="sportsbook-result-kicker">Slip Ready</span>
+                <strong>Select a market, enter a stake, and send it.</strong>
+                <p>Single tickets only for now. Every outcome lands in your wallet and live feed instantly.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const summary = payload.sportsbook;
+    const profit = Number(payload.profit || 0);
+    const won = !!payload.won;
+
+    result.innerHTML = `
+        <div class="sportsbook-result-card ${won ? 'win' : 'loss'}">
+            <span class="sportsbook-result-kicker">${won ? 'Ticket Cashed' : 'Ticket Missed'}</span>
+            <strong>${summary.scoreline}</strong>
+            <p>${summary.headline} ${summary.detail}</p>
+            <div class="sportsbook-result-grid">
+                <div>
+                    <span>Slip</span>
+                    <strong>${summary.selection}</strong>
+                </div>
+                <div>
+                    <span>Price</span>
+                    <strong>${Number(summary.odds).toFixed(2)}x</strong>
+                </div>
+                <div>
+                    <span>Result</span>
+                    <strong>${profit >= 0 ? '+' : ''}$${formatAmount(profit)}</strong>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function placeSportsbookBet() {
+    if (!startGameAction('sports', LONG_GAME_COOLDOWN_MS)) {
+        return;
+    }
+
+    const amount = readAmountInput('sportsbookBetAmount');
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Sports bet')) {
+        finishGameAction('sports', 250);
+        return;
+    }
+
+    const button = document.getElementById('sportsbookPlaceBet');
+    const { fixture, market } = getSportsbookSelection();
+    if (button) {
+        button.disabled = true;
+    }
+
+    try {
+        const data = await window.playServerGame({
+            gameType: 'sports',
+            amount,
+            payload: {
+                fixtureId: fixture.id,
+                marketId: market.id
+            }
+        });
+
+        if (!data) {
+            return;
+        }
+
+        renderSportsbookResult(data);
+        showNotification(
+            data.won
+                ? `${market.label} cleared at ${market.odds.toFixed(2)}x.`
+                : `${market.label} got clipped on the close.`,
+            data.won ? 'success' : 'error'
+        );
+    } finally {
+        if (button) {
+            button.disabled = false;
+        }
+        finishGameAction('sports', LONG_GAME_COOLDOWN_MS);
+    }
+}
+
+function loadSportsGame(container) {
+    container.innerHTML = `
+        <div class="game-container sportsbook-game">
+            <div class="responsive-grid sportsbook-layout" data-desktop-columns="minmax(0, 1.5fr) minmax(320px, 0.85fr)">
+                <section class="sportsbook-board">
+                    <div class="sportsbook-hero" id="sportsbookFeature"></div>
+                    <div class="sportsbook-ticket-wall">
+                        ${SPORTSBOOK_SLATE.map((fixture) => buildSportsbookFixtureCard(fixture, sportsbookSelection.marketId)).join('')}
+                    </div>
+                </section>
+
+                <aside class="sportsbook-slip">
+                    <div class="sportsbook-slip-header">
+                        <span class="sportsbook-slip-kicker">Bet Slip</span>
+                        <strong>Single Ticket</strong>
+                    </div>
+
+                    <div class="sportsbook-selection" id="sportsbookSelection"></div>
+
+                    <label class="bet-input-group">
+                        <span class="bet-label">Stake</span>
+                        <input id="sportsbookBetAmount" class="bet-input" type="text" placeholder="1m, 10m, 100m" data-amount-input="true" autocomplete="off">
+                    </label>
+
+                    <div class="quick-bets sportsbook-quick-bets">
+                        <button class="quick-bet-btn" type="button" data-sports-amount="1000000">1M</button>
+                        <button class="quick-bet-btn" type="button" data-sports-amount="10000000">10M</button>
+                        <button class="quick-bet-btn" type="button" data-sports-amount="100000000">100M</button>
+                        <button class="quick-bet-btn" type="button" data-sports-amount="max">MAX</button>
+                    </div>
+
+                    <div class="sportsbook-slip-metrics">
+                        <div>
+                            <span>Stake</span>
+                            <strong id="sportsbookStakePreview">$0.00</strong>
+                        </div>
+                        <div>
+                            <span>Potential Payout</span>
+                            <strong id="sportsbookPotentialPayout">$0.00</strong>
+                        </div>
+                    </div>
+
+                    <button id="sportsbookPlaceBet" class="btn-primary" type="button">
+                        <i class="fas fa-ticket"></i> Lock Ticket
+                    </button>
+
+                    <div class="sportsbook-note">
+                        Markets resolve on the server so the slip, wallet, and live feed stay in sync.
+                    </div>
+
+                    <div id="sportsbookResult" class="sportsbook-result"></div>
+                </aside>
+            </div>
+        </div>
+    `;
+
+    const input = document.getElementById('sportsbookBetAmount');
+    const button = document.getElementById('sportsbookPlaceBet');
+
+    container.querySelectorAll('[data-sports-fixture][data-sports-market]').forEach((marketButton) => {
+        marketButton.addEventListener('click', () => {
+            updateSportsbookSelection(marketButton.dataset.sportsFixture, marketButton.dataset.sportsMarket);
+        });
+    });
+
+    container.querySelectorAll('[data-sports-amount]').forEach((quickButton) => {
+        quickButton.addEventListener('click', () => {
+            const rawValue = quickButton.dataset.sportsAmount;
+            const quickAmount = rawValue === 'max'
+                ? Math.floor(Number(currentPlayer?.balance || 0))
+                : Number(rawValue);
+            if (!Number.isFinite(quickAmount) || quickAmount <= 0) {
+                return;
+            }
+            window.setAmountInputValue('sportsbookBetAmount', quickAmount);
+            renderSportsbookSummary();
+        });
+    });
+
+    if (input) {
+        input.addEventListener('input', renderSportsbookSummary);
+        input.addEventListener('blur', renderSportsbookSummary);
+    }
+
+    if (button) {
+        button.addEventListener('click', placeSportsbookBet);
+    }
+
+    renderSportsbookSummary();
+    renderSportsbookResult();
 }
 
 window.handleCrashRealtimeState = handleCrashRealtimeState;

@@ -3457,3 +3457,505 @@ select.bet-input:focus {
         transform: none;
     }
 }
+
+/* Performance + sportsbook refresh */
+
+:root {
+    --bg-primary: #070b08;
+    --bg-secondary: #0c110d;
+    --bg-tertiary: #111711;
+    --panel-raised: #141b15;
+    --line-soft: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(102, 255, 168, 0.2);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --accent-primary: #00e85d;
+    --accent-secondary: #cfff45;
+    --accent-success: #00e85d;
+    --accent-danger: #ff6b57;
+    --accent-warning: #ffb224;
+    --accent-cyan: #1ee6c8;
+    --accent-blue: #72ffd2;
+    --accent-coral: #ff7d45;
+    --text-primary: #f5fff8;
+    --text-secondary: #a4b4a5;
+    --text-muted: #69786a;
+    --shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.34);
+    --shadow-tight: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+body {
+    background:
+        radial-gradient(circle at top center, rgba(0, 232, 93, 0.12), transparent 24%),
+        radial-gradient(circle at 82% 16%, rgba(30, 230, 200, 0.09), transparent 18%),
+        linear-gradient(180deg, #0a0e0b 0%, #0d120f 46%, #070b08 100%);
+}
+
+body::before,
+body::after,
+.ambient-shell,
+.showcase-card::before,
+.switch-chip::before,
+.nav-item::before,
+.overview-card::before,
+.dashboard-banner::before,
+.game-stage::before,
+.live-bet::before,
+.game-container::before,
+.bet-panel::before,
+.topbar::after,
+.dashboard-banner::after,
+.game-stage::after,
+.live-sidebar::after,
+.notification::after {
+    display: none !important;
+}
+
+#loginScreen.active .login-story,
+#loginScreen.active .login-card,
+#mainScreen.active .sidebar,
+#mainScreen.active .topbar,
+#mainScreen.active .dashboard-banner,
+#mainScreen.active .overview-card,
+#mainScreen.active .game-stage,
+#mainScreen.active .live-sidebar,
+#gameContent > .game-container,
+.notification.visible,
+.notification-progress {
+    animation: none !important;
+}
+
+.login-story,
+.login-card,
+.sidebar,
+.topbar,
+.dashboard-banner,
+.overview-card,
+.game-stage,
+.live-sidebar,
+.game-container,
+.bet-panel,
+.bet-section,
+.story-stat,
+.sidebar-balance,
+.nav-item,
+.network-pill,
+.user-balance,
+.user-profile,
+.summary-tile,
+.feed-block,
+.chat-panel,
+.live-bet,
+.field-input,
+.bet-input,
+.notification,
+.notification-icon,
+.chat-message-body,
+.tip-modal-card,
+.profile-avatar-wrap,
+.profile-hero-panel,
+.daily-crate-stage,
+.wallet-balance-card,
+.wallet-transfer-card,
+.case-reward-row,
+.case-batch-card,
+.daily-claim-row,
+.jackpot-pot-card,
+.jackpot-meter,
+.jackpot-entry,
+.jackpot-history-row,
+.sportsbook-hero,
+.sportsbook-slip,
+.sports-fixture,
+.sports-market-btn,
+.sportsbook-result-card,
+.sportsbook-mini-card,
+.sportsbook-selection,
+.sportsbook-note {
+    border-radius: 8px !important;
+}
+
+.btn-login,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.quick-bet-btn,
+.btn-open-case,
+.btn-logout,
+.chat-tip-btn,
+.feed-action-btn {
+    border-radius: 8px !important;
+}
+
+.login-story,
+.login-card,
+.topbar,
+.dashboard-banner,
+.game-stage,
+.live-sidebar,
+.game-container,
+.bet-panel,
+.wallet-balance-card,
+.wallet-transfer-card,
+.profile-hero-panel,
+.daily-crate-stage,
+.tip-modal-card,
+.sportsbook-hero,
+.sportsbook-slip {
+    background:
+        linear-gradient(180deg, rgba(17, 22, 18, 0.98), rgba(10, 13, 11, 0.98)),
+        radial-gradient(circle at top right, rgba(0, 232, 93, 0.08), transparent 40%) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: var(--shadow-soft) !important;
+}
+
+.sidebar,
+.story-stat,
+.overview-card,
+.sidebar-balance,
+.summary-tile,
+.feed-block,
+.chat-panel,
+.live-bet,
+.chat-message-body,
+.sports-fixture,
+.sportsbook-mini-card,
+.sportsbook-result-card,
+.sportsbook-selection,
+.sportsbook-note {
+    background:
+        linear-gradient(180deg, rgba(18, 24, 19, 0.98), rgba(11, 14, 12, 0.98)),
+        radial-gradient(circle at top right, rgba(30, 230, 200, 0.05), transparent 42%) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: var(--shadow-tight) !important;
+}
+
+.sidebar {
+    border-right: 1px solid rgba(0, 232, 93, 0.12);
+}
+
+.brand-mark,
+.btn-login,
+.btn-primary {
+    background: linear-gradient(135deg, #00e85d, #cfff45) !important;
+    color: #041008 !important;
+    box-shadow: 0 12px 28px rgba(0, 232, 93, 0.2) !important;
+}
+
+.btn-secondary {
+    background: linear-gradient(180deg, rgba(26, 32, 28, 0.98), rgba(11, 13, 12, 0.98)) !important;
+    border-color: rgba(30, 230, 200, 0.18) !important;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ff7d45, #ff5d5d) !important;
+    box-shadow: 0 12px 26px rgba(255, 107, 87, 0.18) !important;
+}
+
+.showcase-card,
+.switch-chip,
+.nav-item,
+.mode-chip,
+.live-status,
+.mode-pill {
+    background: rgba(255, 255, 255, 0.025) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.showcase-card.active,
+.switch-chip.active,
+.nav-item.active {
+    background: rgba(0, 232, 93, 0.1) !important;
+    border-color: rgba(0, 232, 93, 0.35) !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 232, 93, 0.08) !important;
+}
+
+.showcase-card:hover,
+.switch-chip:hover,
+.nav-item:hover,
+.btn-login:hover,
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-danger:hover,
+.quick-bet-btn:hover,
+.feed-action-btn:hover,
+.chat-tip-btn:hover {
+    transform: translateY(-1px) !important;
+}
+
+.story-title {
+    font-size: 4rem;
+}
+
+.topbar-title-row h2 {
+    font-size: 2.3rem;
+}
+
+.topbar-title-row h2,
+.game-title,
+.stage-focus,
+.overview-card strong,
+.story-stat strong {
+    text-shadow: none !important;
+}
+
+.live-bet {
+    border-left: 3px solid transparent;
+}
+
+.live-bet.win {
+    border-left-color: var(--accent-success);
+}
+
+.live-bet.loss {
+    border-left-color: var(--accent-danger);
+}
+
+.live-bet-result,
+.summary-tile strong,
+.sportsbook-result-grid strong,
+.sportsbook-slip-metrics strong {
+    font-family: 'Sora', sans-serif;
+}
+
+.notification {
+    min-height: 78px;
+}
+
+.notification-progress {
+    opacity: 0.6;
+}
+
+.chat-panel {
+    position: static !important;
+}
+
+.chat-message-body {
+    gap: 8px;
+}
+
+.chat-message-text {
+    color: #c7d5c8;
+}
+
+.chat-message-text.is-tip {
+    color: var(--accent-secondary);
+}
+
+.live-bet-avatar,
+.chat-avatar,
+.chat-user-avatar,
+.user-avatar,
+.story-avatars img {
+    border-color: rgba(0, 232, 93, 0.18);
+}
+
+.sportsbook-layout,
+.sportsbook-board,
+.sportsbook-ticket-wall {
+    display: grid;
+    gap: 14px;
+}
+
+.sportsbook-hero,
+.sportsbook-slip {
+    padding: 20px;
+}
+
+.sportsbook-kicker,
+.sportsbook-slip-kicker,
+.sportsbook-result-kicker,
+.sports-fixture-league,
+.sportsbook-slip-label {
+    color: var(--accent-cyan);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sportsbook-hero h3 {
+    font-family: 'Sora', sans-serif;
+    font-size: 2rem;
+    margin-top: 10px;
+}
+
+.sportsbook-hero p,
+.sports-fixture-note,
+.sportsbook-note,
+.sportsbook-result-card p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.sportsbook-mini-grid,
+.sportsbook-result-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.sportsbook-mini-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 16px;
+}
+
+.sportsbook-mini-card,
+.sportsbook-result-grid > div {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.sports-fixture {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+}
+
+.sports-fixture.is-active {
+    border-color: rgba(0, 232, 93, 0.34) !important;
+}
+
+.sports-fixture-head {
+    align-items: start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.sports-fixture-head strong,
+.sportsbook-selection strong,
+.sportsbook-result-card strong,
+.sportsbook-slip-header strong {
+    font-family: 'Sora', sans-serif;
+}
+
+.sports-fixture-start {
+    color: var(--accent-secondary);
+    font-size: 0.78rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.sports-market-row {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sports-market-btn {
+    align-items: start;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    display: grid;
+    gap: 7px;
+    min-height: 72px;
+    padding: 12px;
+    text-align: left;
+}
+
+.sports-market-btn strong {
+    color: var(--accent-primary);
+    font-family: 'Sora', sans-serif;
+}
+
+.sports-market-btn.active {
+    background: rgba(0, 232, 93, 0.1);
+    border-color: rgba(0, 232, 93, 0.36);
+}
+
+.sportsbook-slip {
+    align-self: start;
+    display: grid;
+    gap: 14px;
+    position: sticky;
+    top: 20px;
+}
+
+.sportsbook-selection,
+.sportsbook-note {
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+}
+
+.sportsbook-selection span:last-child {
+    color: var(--text-secondary);
+}
+
+.sportsbook-slip-header {
+    display: grid;
+    gap: 6px;
+}
+
+.sportsbook-slip-metrics {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sportsbook-slip-metrics > div {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.sportsbook-result {
+    min-height: 180px;
+}
+
+.sportsbook-result-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+}
+
+.sportsbook-result-card.win {
+    border-color: rgba(0, 232, 93, 0.32) !important;
+}
+
+.sportsbook-result-card.loss {
+    border-color: rgba(255, 107, 87, 0.32) !important;
+}
+
+.sportsbook-result-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 960px) {
+    .story-title {
+        font-size: 3rem;
+    }
+
+    .sportsbook-mini-grid,
+    .sports-market-row,
+    .sportsbook-slip-metrics,
+    .sportsbook-result-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .story-title {
+        font-size: 2.35rem;
+    }
+
+    .topbar-title-row h2 {
+        font-size: 1.85rem;
+    }
+
+    .sportsbook-hero h3 {
+        font-size: 1.55rem;
+    }
+
+    .sportsbook-slip {
+        position: static;
+        top: auto;
+    }
+}

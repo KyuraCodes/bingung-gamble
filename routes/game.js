@@ -61,9 +61,73 @@ const WHEEL_SEGMENT_MAP = {
 };
 const JACKPOT_MAX_PLAYERS = 10;
 const JACKPOT_ROUND_MS = 30000;
+const SPORTSBOOK_EDGE = 0.84;
+const SPORTSBOOK_FIXTURES = [
+    {
+        id: 'night-run',
+        sport: 'Basketball',
+        league: 'Night Run League',
+        home: 'Metro Owls',
+        away: 'Neon Vipers',
+        scoreMode: 'points',
+        suffix: '',
+        totalLine: 214.5,
+        markets: [
+            { id: 'home', label: 'Metro Owls', odds: 1.84, kind: 'home' },
+            { id: 'away', label: 'Neon Vipers', odds: 2.02, kind: 'away' },
+            { id: 'over', label: 'Over 214.5', odds: 1.96, kind: 'over', line: 214.5 }
+        ]
+    },
+    {
+        id: 'harbor-clash',
+        sport: 'Football',
+        league: 'Harbor Premier',
+        home: 'Harbor FC',
+        away: 'Goldcrest United',
+        scoreMode: 'goals',
+        suffix: '',
+        totalLine: 2.5,
+        markets: [
+            { id: 'home', label: 'Harbor FC', odds: 2.1, kind: 'home' },
+            { id: 'away', label: 'Goldcrest United', odds: 2.62, kind: 'away' },
+            { id: 'over', label: 'Over 2.5', odds: 2.04, kind: 'over', line: 2.5 }
+        ]
+    },
+    {
+        id: 'court-royal',
+        sport: 'Tennis',
+        league: 'Royal Indoor',
+        home: 'Mika Stone',
+        away: 'Rian Vale',
+        scoreMode: 'sets',
+        suffix: 'sets',
+        totalLine: 2.5,
+        markets: [
+            { id: 'home', label: 'Mika Stone', odds: 1.72, kind: 'home' },
+            { id: 'away', label: 'Rian Vale', odds: 2.34, kind: 'away' },
+            { id: 'over', label: 'Over 2.5 sets', odds: 2.48, kind: 'over', line: 2.5 }
+        ]
+    },
+    {
+        id: 'rift-rush',
+        sport: 'Esports',
+        league: 'Rift Rush Series',
+        home: 'Ghost Signal',
+        away: 'Nova Pulse',
+        scoreMode: 'maps',
+        suffix: 'maps',
+        totalLine: 2.5,
+        markets: [
+            { id: 'home', label: 'Ghost Signal', odds: 1.9, kind: 'home' },
+            { id: 'away', label: 'Nova Pulse', odds: 1.98, kind: 'away' },
+            { id: 'over', label: 'Over 2.5 maps', odds: 2.18, kind: 'over', line: 2.5 }
+        ]
+    }
+];
 const KNOWN_GAME_TYPES = new Set([
     'casino',
     'crash',
+    'sports',
     'mines',
     'towers',
     'plinko',
@@ -77,11 +141,12 @@ const KNOWN_GAME_TYPES = new Set([
     'cases',
     'jackpot'
 ]);
-const SERVER_PLAY_GAME_TYPES = new Set(['dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo']);
+const SERVER_PLAY_GAME_TYPES = new Set(['sports', 'dice', 'plinko', 'roulette', 'coinflip', 'wheel', 'limbo']);
 const INTERACTIVE_SETTLE_GAME_TYPES = new Set(['mines', 'towers', 'blackjack', 'slots']);
 const MAX_MULTIPLIER_BY_GAME = {
     casino: 40,
     crash: 80,
+    sports: 4,
     mines: 6.5,
     towers: 3.6,
     plinko: 30,
@@ -246,6 +311,115 @@ function buildSettlementValidation({ amount, payout, gameType }) {
 function sanitizePlinkoRows(value) {
     const parsed = Math.round(readNumber(value) || DEFAULT_PLINKO_ROWS);
     return Math.max(MIN_PLINKO_ROWS, Math.min(MAX_PLINKO_ROWS, parsed));
+}
+
+function getSportsbookFixture(fixtureId) {
+    return SPORTSBOOK_FIXTURES.find((fixture) => fixture.id === String(fixtureId || '').toLowerCase()) || null;
+}
+
+function getSportsbookMarket(fixture, marketId) {
+    if (!fixture) {
+        return null;
+    }
+
+    return fixture.markets.find((market) => market.id === String(marketId || '').toLowerCase()) || null;
+}
+
+function seededRoll(profile, nonceUsed, cursor = 0) {
+    return rollFloat({
+        serverSeed: profile.server_seed,
+        clientSeed: profile.client_seed,
+        nonce: nonceUsed,
+        cursor
+    });
+}
+
+function seededInt(profile, nonceUsed, cursor, minInclusive, maxInclusive) {
+    return minInclusive + rollInt({
+        serverSeed: profile.server_seed,
+        clientSeed: profile.client_seed,
+        nonce: nonceUsed,
+        cursor,
+        maxExclusive: (maxInclusive - minInclusive) + 1
+    });
+}
+
+function buildSportsbookSeriesScore({ fixture, market, won, profile, nonceUsed }) {
+    const preferHome = market.kind === 'home';
+    const actualHomeWins = market.kind === 'over'
+        ? seededRoll(profile, nonceUsed, 6) >= 0.5
+        : (preferHome ? won : !won);
+    const actualOver = market.kind === 'over' ? won : seededRoll(profile, nonceUsed, 7) >= 0.5;
+
+    let homeScore;
+    let awayScore;
+
+    if (actualOver) {
+        homeScore = actualHomeWins ? 2 : 1;
+        awayScore = actualHomeWins ? 1 : 2;
+    } else {
+        homeScore = actualHomeWins ? 2 : 0;
+        awayScore = actualHomeWins ? 0 : 2;
+    }
+
+    const scoreline = `${fixture.home} ${homeScore}-${awayScore} ${fixture.away}`;
+    const suffix = fixture.suffix ? ` ${fixture.suffix}` : '';
+    const winner = homeScore > awayScore ? fixture.home : fixture.away;
+
+    return {
+        scoreline,
+        headline: `${winner} closed the match ${homeScore}-${awayScore}${suffix}.`,
+        detail: market.kind === 'over'
+            ? `${market.label} ${won ? 'cleared' : 'missed'} with a ${homeScore + awayScore}${suffix} finish.`
+            : `${market.label} ${won ? 'held the ticket' : 'fell short'} over ${homeScore + awayScore}${suffix}.`
+    };
+}
+
+function buildSportsbookPointsScore({ fixture, market, won, profile, nonceUsed }) {
+    const isFootball = fixture.scoreMode === 'goals';
+    let homeScore = seededInt(profile, nonceUsed, 2, isFootball ? 0 : 92, isFootball ? 3 : 121);
+    let awayScore = seededInt(profile, nonceUsed, 3, isFootball ? 0 : 88, isFootball ? 4 : 118);
+
+    if (market.kind === 'home' || market.kind === 'away') {
+        const actualHomeWins = market.kind === 'home' ? won : !won;
+        if (actualHomeWins && homeScore <= awayScore) {
+            homeScore = awayScore + seededInt(profile, nonceUsed, 4, 1, isFootball ? 2 : 12);
+        }
+        if (!actualHomeWins && awayScore <= homeScore) {
+            awayScore = homeScore + seededInt(profile, nonceUsed, 5, 1, isFootball ? 2 : 12);
+        }
+    } else {
+        const totalLine = Number(market.line || fixture.totalLine || 0);
+        const actualOver = won;
+        const minimumTotal = actualOver ? Math.ceil(totalLine + 1) : 0;
+        const maximumTotal = actualOver
+            ? (isFootball ? 6 : 244)
+            : Math.max(0, Math.floor(totalLine));
+        const total = Math.max(minimumTotal, seededInt(profile, nonceUsed, 4, minimumTotal, Math.max(minimumTotal, maximumTotal)));
+        const homeShareFloor = isFootball ? 0 : 84;
+        const homeShareCeiling = total - (isFootball ? 0 : 80);
+        homeScore = seededInt(profile, nonceUsed, 5, Math.max(0, homeShareFloor), Math.max(Math.max(0, homeShareFloor), homeShareCeiling));
+        awayScore = Math.max(0, total - homeScore);
+    }
+
+    const scoreline = `${fixture.home} ${homeScore} - ${awayScore} ${fixture.away}`;
+    const winner = homeScore === awayScore ? 'The board' : (homeScore > awayScore ? fixture.home : fixture.away);
+
+    return {
+        scoreline,
+        headline: `${winner} ${homeScore === awayScore ? 'finished level' : 'closed it'} at ${homeScore}-${awayScore}.`,
+        detail: market.kind === 'over'
+            ? `${market.label} ${won ? 'cashed' : 'stayed under'} on a ${homeScore + awayScore} total.`
+            : `${market.label} ${won ? 'got home clean' : 'missed the ticket'} on the final whistle.`
+    };
+}
+
+function buildSportsbookPresentation({ fixture, market, won, profile, nonceUsed }) {
+    if (fixture.scoreMode === 'sets' || fixture.scoreMode === 'maps') {
+        return buildSportsbookSeriesScore({ fixture, market, won, profile, nonceUsed });
+    }
+
+    return buildSportsbookPointsScore({ fixture, market, won, profile, nonceUsed });
 }
 
 function getBinomialCoefficients(rows) {
@@ -1032,6 +1206,42 @@ function ensureCrashLoopStarted() {
 }
 
 function resolveServerGame({ gameType, amount, body, profile, nonceUsed }) {
+    if (gameType === 'sports') {
+        const fixture = getSportsbookFixture(body.fixtureId);
+        const market = getSportsbookMarket(fixture, body.marketId);
+
+        if (!fixture || !market) {
+            return buildError(400, 'That market is no longer available');
+        }
+
+        const roll = seededRoll(profile, nonceUsed, 0);
+        const winChance = Math.min(0.92, SPORTSBOOK_EDGE / Number(market.odds || 1));
+        const won = roll < winChance;
+        const presentation = buildSportsbookPresentation({ fixture, market, won, profile, nonceUsed });
+
+        return {
+            amount,
+            payout: won ? toMoney(amount * market.odds) : 0,
+            multiplier: won ? Number(market.odds) : 0,
+            won,
+            meta: {
+                sportsbook: {
+                    fixtureId: fixture.id,
+                    sport: fixture.sport,
+                    league: fixture.league,
+                    matchup: `${fixture.home} vs ${fixture.away}`,
+                    selection: market.label,
+                    odds: Number(market.odds),
+                    scoreline: presentation.scoreline,
+                    headline: presentation.headline,
+                    detail: presentation.detail
+                },
+                fairness: buildFairnessPayload(profile, nonceUsed, { roll }),
+                winChance
+            }
+        };
+    }
+
     if (gameType === 'dice') {
         const rollOver = Math.min(98, Math.max(2, Math.floor(readNumber(body.rollOver))));
         const roll = rollFloat({ serverSeed: profile.server_seed, clientSeed: profile.client_seed, nonce: nonceUsed });

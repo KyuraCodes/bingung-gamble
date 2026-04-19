@@ -18,10 +18,10 @@
             <div class="login-shell">
                 <div class="login-story">
                     <div class="story-kicker">BingungSMP Gamble</div>
-                    <h1 class="story-title">One sharper lobby. Every table wired in.</h1>
+                    <h1 class="story-title">One sharper floor. One louder sportsbook.</h1>
                     <p class="story-copy">
-                        Login with your in-game code, jump into any mode, and keep your balance, level,
-                        and live feed moving in one place.
+                        Login with your in-game code, jump from casino tables into the sports board,
+                        and keep your wallet, level, chat, and live feed moving from one control room.
                     </p>
 
                     <div class="story-stat-row">
@@ -52,8 +52,8 @@
                     </div>
 
                     <div class="login-headline">
-                        <h2>Connect your bankroll</h2>
-                        <p>Use the 6-digit code from Minecraft to open your live account wallet.</p>
+                        <h2>Open your action room</h2>
+                        <p>Use the 6-digit code from Minecraft to unlock your live wallet and sportsbook slip.</p>
                     </div>
 
                     <form id="loginForm" class="login-form">
@@ -82,11 +82,11 @@
                     <div class="login-tips">
                         <div class="login-tip">
                             <i class="fas fa-bolt"></i>
-                            <span>Recent bets and chat update in real time while you play.</span>
+                            <span>Every ticket, table, and lobby message updates live while you play.</span>
                         </div>
                         <div class="login-tip">
                             <i class="fas fa-shield-halved"></i>
-                            <span>Your session stays active for 72 hours.</span>
+                            <span>Your session stays active for 72 hours with full wallet sync.</span>
                         </div>
                     </div>
 
@@ -114,6 +114,11 @@
                     </div>
 
                     <nav class="sidebar-nav">
+                        <div class="nav-section">
+                            <span class="nav-label">Sportsbook</span>
+                            <a href="#" class="nav-item" data-game="sports"><i class="fas fa-trophy"></i><span>Sports</span></a>
+                        </div>
+
                         <div class="nav-section">
                             <span class="nav-label">Casino Modes</span>
                             <a href="#" class="nav-item active" data-game="crash"><i class="fas fa-rocket"></i><span>Crash</span></a>
@@ -197,8 +202,8 @@
                         <aside class="live-sidebar">
                             <div class="live-header">
                                 <div>
-                                    <span class="live-label">Realtime Feed</span>
-                                    <strong>Global action</strong>
+                                    <span class="live-label">Floor Feed</span>
+                                    <strong>Hot action</strong>
                                 </div>
                                 <span class="live-status" id="liveFeedStatus">synced</span>
                             </div>
@@ -223,7 +228,7 @@
 
                             <div class="feed-block">
                                 <div class="feed-block-header">
-                                    <strong>Recent Bets</strong>
+                                    <strong>Fresh Tickets</strong>
                                     <button id="recentBetsToggle" class="feed-action-btn" type="button">More</button>
                                 </div>
                                 <div id="liveBets" class="live-bets"></div>
@@ -231,13 +236,13 @@
 
                             <section class="chat-panel">
                                 <div class="feed-block-header">
-                                    <strong>Live Chat</strong>
+                                    <strong>Lobby Chat</strong>
                                     <span id="chatPresenceSummary">0 online now</span>
                                 </div>
                                 <div id="liveChatMessages" class="live-chat-messages"></div>
                                 <form id="liveChatForm" class="live-chat-form">
                                     <img id="chatUserAvatar" src="https://mc-heads.net/avatar/Steve/48" alt="Chat avatar" class="chat-user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
-                                    <input id="liveChatInput" type="text" class="chat-input" maxlength="220" placeholder="Talk to players on the website">
+                                    <input id="liveChatInput" type="text" class="chat-input" maxlength="220" placeholder="Send a table call to the lobby">
                                     <button class="btn-primary chat-send-btn" type="submit">
                                         <i class="fas fa-paper-plane"></i>
                                     </button>
