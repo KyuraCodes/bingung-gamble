@@ -6,7 +6,7 @@
     <title>BingungSMP Gamble</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -108,7 +108,7 @@
                         </div>
 
                         <button id="sidebarBalanceCard" class="sidebar-balance sidebar-balance-btn" type="button">
-                            <span class="sidebar-balance-label">&#x1F4B5; Website Wallet</span>
+                            <span class="sidebar-balance-label">Website Wallet</span>
                             <strong id="sidebarBalance">$0.00</strong>
                             <small>Open wallet hub</small>
                         </button>
@@ -166,15 +166,22 @@
                             <p id="gameDescription">Ride the multiplier, bank in time, and keep the streak alive.</p>
                         </div>
 
-                        <button id="topbarWalletCard" class="topbar-wallet-core" type="button">
-                            <span class="topbar-wallet-kicker">&#x1F4B8; Website Wallet</span>
-                            <strong id="userBalance">$0.00</strong>
-                            <span class="topbar-wallet-subtext">Tap to open wallet + profile hub</span>
+                        <button id="topbarWalletCard" class="topbar-balance-chip" type="button" aria-label="Open wallet and profile hub">
+                            <span class="balance-chip-icon" aria-hidden="true">
+                                <i class="fas fa-wallet"></i>
+                            </span>
+                            <span class="balance-chip-copy">
+                                <span class="balance-chip-label">Balance</span>
+                                <strong id="userBalance">$0.00</strong>
+                            </span>
+                            <span class="balance-chip-action" aria-hidden="true">
+                                <i class="fas fa-plus"></i>
+                            </span>
                         </button>
 
                         <div class="topbar-actions">
                             <div class="network-pill online-presence-card" id="topbarOnlineCard" tabindex="0">
-                                <span class="network-pill-symbol">&#x1F465;</span>
+                                <span class="network-pill-dot" aria-hidden="true"></span>
                                 <div class="network-pill-copy">
                                     <span class="network-pill-label">Online</span>
                                     <strong id="topbarOnlinePlayers">0</strong>
@@ -189,22 +196,13 @@
                                 </div>
                             </div>
 
-                            <div class="network-pill network-pill-compact">
-                                <span class="network-pill-symbol">&#x1F7E2;</span>
-                                <div class="network-pill-copy">
-                                    <span class="network-pill-label">Floor Sync</span>
-                                    <strong id="liveFeedStatus">synced</strong>
-                                    <small>Live updates active</small>
-                                </div>
-                            </div>
-
                             <button id="userProfileCard" class="user-profile topbar-profile-button" type="button">
                                 <img id="userSkin" src="https://mc-heads.net/avatar/Steve/48" alt="Player skin" class="user-avatar" data-avatar-name="Steve" data-avatar-size="48" loading="lazy">
                                 <div class="user-info">
                                     <span id="userName" class="user-name">Player</span>
                                     <span id="userLevel" class="user-level">Level 1</span>
                                 </div>
-                                <span class="user-profile-hint">Open Profile</span>
+                                <span class="user-profile-hint">Profile</span>
                             </button>
 
                             <button id="logoutBtn" class="btn-logout" type="button" aria-label="Logout">
@@ -275,36 +273,36 @@
                             </div>
                             <button id="floorPulseCard" class="floor-pulse-card feed-focus-card" type="button">
                                 <div>
-                                    <span class="summary-label">&#x1F39B; Floor Pulse</span>
+                                    <span class="summary-label">Floor Pulse</span>
                                     <strong id="summaryGlobalBets">0 bets</strong>
                                     <p id="betFeedInsight">Fresh slips, live chat, and every wallet move pulse from here.</p>
                                 </div>
                                 <div class="pulse-metrics">
                                     <div class="pulse-metric">
-                                        <span>&#x26A1; Win Rate</span>
+                                        <span>Win Rate</span>
                                         <strong id="summaryWinRate">0%</strong>
                                     </div>
                                     <div class="pulse-metric">
-                                        <span>&#x1F4B9; Net Flow</span>
+                                        <span>Net Flow</span>
                                         <strong id="summaryNetProfit">$0.00</strong>
                                     </div>
                                 </div>
                             </button>
                             <div class="realtime-summary">
                                 <button id="summaryTileOnline" class="summary-tile summary-action-card" type="button" data-summary-action="online">
-                                    <span class="summary-label">&#x1F465; Online</span>
+                                    <span class="summary-label">Online</span>
                                     <strong id="summaryOnlinePlayers">0</strong>
                                 </button>
                                 <button id="summaryTileWins" class="summary-tile summary-action-card" type="button" data-summary-action="wins">
-                                    <span class="summary-label">&#x1F3C6; Global Wins</span>
+                                    <span class="summary-label">Global Wins</span>
                                     <strong id="summaryGlobalWins">0</strong>
                                 </button>
                                 <button id="summaryTileLosses" class="summary-tile summary-action-card" type="button" data-summary-action="losses">
-                                    <span class="summary-label">&#x1F9E8; Global Losses</span>
+                                    <span class="summary-label">Global Losses</span>
                                     <strong id="summaryGlobalLosses">0</strong>
                                 </button>
                                 <button id="summaryTileVolume" class="summary-tile summary-action-card" type="button" data-summary-action="all">
-                                    <span class="summary-label">&#x1F4B0; Volume</span>
+                                    <span class="summary-label">Volume</span>
                                     <strong id="summaryGlobalVolume">$0.00</strong>
                                 </button>
                             </div>

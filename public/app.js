@@ -22,9 +22,41 @@ const AMOUNT_SUFFIXES = {
     m: 1e6,
     b: 1e9,
     t: 1e12,
-    q: 1e15
+    q: 1e15,
+    qt: 1e18,
+    sx: 1e21,
+    sp: 1e24,
+    oc: 1e27,
+    no: 1e30,
+    dc: 1e33
 };
-const GAME_MIN_BET = 1e6;
+const AMOUNT_FORMAT_TIERS = [
+    ['DC', 1e33],
+    ['NO', 1e30],
+    ['OC', 1e27],
+    ['SP', 1e24],
+    ['SX', 1e21],
+    ['QT', 1e18],
+    ['Q', 1e15],
+    ['T', 1e12],
+    ['B', 1e9],
+    ['M', 1e6],
+    ['K', 1e3]
+];
+const AMOUNT_INPUT_TIERS = [
+    ['dc', 1e33],
+    ['no', 1e30],
+    ['oc', 1e27],
+    ['sp', 1e24],
+    ['sx', 1e21],
+    ['qt', 1e18],
+    ['q', 1e15],
+    ['t', 1e12],
+    ['b', 1e9],
+    ['m', 1e6],
+    ['k', 1e3]
+];
+const GAME_MIN_BET = 1e5;
 const GAME_MAX_BET = 5e15;
 
 const GAME_META = {
@@ -252,11 +284,11 @@ function formatAmount(num) {
     const value = Number(num || 0);
     const absNum = Math.abs(value);
 
-    if (absNum >= 1e15) return (value / 1e15).toFixed(2) + 'Q';
-    if (absNum >= 1e12) return (value / 1e12).toFixed(2) + 'T';
-    if (absNum >= 1e9) return (value / 1e9).toFixed(2) + 'B';
-    if (absNum >= 1e6) return (value / 1e6).toFixed(2) + 'M';
-    if (absNum >= 1e3) return (value / 1e3).toFixed(2) + 'K';
+    for (const [suffix, threshold] of AMOUNT_FORMAT_TIERS) {
+        if (absNum >= threshold) {
+            return `${trimAmountDecimals(value / threshold)}${suffix}`;
+        }
+    }
 
     return value.toFixed(2);
 }
@@ -264,15 +296,8 @@ function formatAmount(num) {
 function formatCompactAmountInput(num) {
     const value = Number(num || 0);
     const absNum = Math.abs(value);
-    const tiers = [
-        ['q', 1e15],
-        ['t', 1e12],
-        ['b', 1e9],
-        ['m', 1e6],
-        ['k', 1e3]
-    ];
 
-    for (const [suffix, threshold] of tiers) {
+    for (const [suffix, threshold] of AMOUNT_INPUT_TIERS) {
         if (absNum >= threshold) {
             return `${trimAmountDecimals(value / threshold)}${suffix}`;
         }
@@ -341,7 +366,7 @@ function parseAmountInput(rawValue) {
         return NaN;
     }
 
-    const match = normalized.match(/^(-?\d+(?:\.\d+)?)([kmbtq])?$/i);
+    const match = normalized.match(/^(-?\d+(?:\.\d+)?)(dc|no|oc|sp|sx|qt|q|t|b|m|k)?$/i);
     if (!match) {
         return Number(normalized);
     }
@@ -2370,7 +2395,7 @@ function loadProfileGame(container) {
                 <div class="profile-hero-copy">
                     <span class="banner-tag">BingungSMP Gamble</span>
                     <h3>${currentPlayer.username}</h3>
-                    <p>Website wallet starts from zero. Deposit pulls money from Minecraft into the website wallet, and withdraw sends website winnings back to Minecraft.</p>
+                    <p>Move money in from Minecraft, play with one clean website balance, and cash back out whenever you want.</p>
                     <div class="profile-level-row">
                         <strong id="profileLevelValue">Level ${currentPlayer.level}/${currentPlayer.maxLevel}</strong>
                         <span id="profileXpValue">${currentPlayer.level >= currentPlayer.maxLevel ? 'Max level reached' : `${formatAmount(currentPlayer.xpToNextLevel)} XP left`}</span>
@@ -2384,7 +2409,7 @@ function loadProfileGame(container) {
                     <div>
                         <span class="banner-tag">Profile Overview</span>
                         <h3>All your bankroll, level pace, and floor momentum live here.</h3>
-                        <p>Deposit while offline, withdraw while offline, and track how your website balance, table profit, and live floor traffic are moving together.</p>
+                        <p>One wallet in the middle, clean stats underneath, and your live progress always visible.</p>
                     </div>
                     <div class="dashboard-banner-side">
                         <div class="dashboard-spotlight">
@@ -2441,7 +2466,7 @@ function loadProfileGame(container) {
                         <div class="wallet-transfer-controls">
                             <label class="wallet-transfer-input">
                                 <span>Amount</span>
-                                <input id="walletDepositAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                                <input id="walletDepositAmount" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
                             </label>
                             <button class="btn-primary wallet-transfer-btn" type="submit">Deposit</button>
                         </div>
@@ -2457,7 +2482,7 @@ function loadProfileGame(container) {
                         <div class="wallet-transfer-controls">
                             <label class="wallet-transfer-input">
                                 <span>Amount</span>
-                                <input id="walletWithdrawAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                                <input id="walletWithdrawAmount" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
                             </label>
                             <button class="btn-secondary wallet-transfer-btn" type="submit">Withdraw</button>
                         </div>
@@ -2486,33 +2511,33 @@ function renderQuickWalletPanel(container, game) {
             <form id="walletDepositForm" class="quick-wallet-form">
                 <label>
                     <span>Deposit</span>
-                    <input id="walletDepositAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                    <input id="walletDepositAmount" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
                 </label>
                 <button class="btn-primary wallet-transfer-btn" type="submit">Deposit</button>
             </form>
             <div class="quick-wallet-side-card">
-                <span>&#x1FA99; Minecraft Balance</span>
+                <span>Minecraft Balance</span>
                 <strong id="vaultTransferBalance">$${formatAmount(currentPlayer.vaultBalance)}</strong>
                 <small>Vault money ready to move in</small>
             </div>
         </div>
         <button class="quick-wallet-core" id="quickWalletCore" type="button">
-            <span class="quick-wallet-core-kicker">&#x1F4B8; Wallet Core</span>
+            <span class="quick-wallet-core-kicker">Website Balance</span>
             <strong id="walletTransferBalance">$${formatAmount(currentPlayer.balance)}</strong>
-            <span class="quick-wallet-core-copy">Website wallet stays in the middle so deposits, bets, and withdrawals all orbit one number.</span>
+            <span class="quick-wallet-core-copy">Deposit, bet, and withdraw around one clean number.</span>
         </button>
         <div class="quick-wallet-lane quick-wallet-lane-right">
             <form id="walletWithdrawForm" class="quick-wallet-form">
                 <label>
                     <span>Withdraw</span>
-                    <input id="walletWithdrawAmount" type="text" placeholder="1k, 1m, 1b" data-amount-input="true" autocomplete="off">
+                    <input id="walletWithdrawAmount" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
                 </label>
                 <button class="btn-secondary wallet-transfer-btn" type="submit">Withdraw</button>
             </form>
             <div class="quick-wallet-side-card">
-                <span>&#x1F3AF; Bet Guardrail</span>
+                <span>Minimum Bet</span>
                 <strong>${getBetLimitMessage()}</strong>
-                <small>Keep every ticket inside the website limits</small>
+                <small>Every table follows the same limits</small>
             </div>
         </div>
     `;
@@ -2777,7 +2802,7 @@ function updateBetFeedInsight(bets = cachedRecentBets) {
     const recentSet = Array.isArray(bets) ? bets : [];
     if (recentSet.length === 0) {
         if (insight) {
-            insight.textContent = 'Fresh slips, live chat, and bot sims all pulse from here.';
+            insight.textContent = 'Latest website bets and results land here.';
         }
         if (info) {
             info.textContent = 'Latest global slips';

@@ -2,84 +2,95 @@
 function loadCrashGame(container) {
     container.innerHTML = `
         <div class="game-container crash-game">
-            <div class="game-split-layout crash-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div>
-                    <div class="crash-stage-panel mode-stage-card" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; position: relative; height: 500px;">
-                        <canvas id="crashCanvas" width="800" height="460" style="width: 100%; height: 100%;"></canvas>
+            <div class="crash-shell">
+                <section class="crash-stage-panel mode-stage-card">
+                    <div class="crash-stage-display">
+                        <canvas id="crashCanvas" width="800" height="460"></canvas>
                         <div id="crashCountdownBanner" class="crash-countdown-banner">
-                            <span>Round Starting In</span>
+                            <span>Next Round</span>
                             <strong>--</strong>
                         </div>
-                        <div id="crashMultiplierOverlay" class="mode-multiplier-display crash-multiplier-display" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: 900; text-shadow: 0 0 30px rgba(0,0,0,0.8); pointer-events: none; z-index: 10;">1.00x</div>
+                        <div id="crashMultiplierOverlay" class="mode-multiplier-display crash-multiplier-display">1.00x</div>
                     </div>
-                    
-                    <div class="crash-stat-bar mode-stage-card" style="margin-top: 20px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">CURRENT BET</div>
-                                <div id="crashCurrentBet" style="font-size: 18px; font-weight: 800; color: var(--accent-primary);">$0.00</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">POTENTIAL WIN</div>
-                                <div id="crashPotentialWin" style="font-size: 18px; font-weight: 800; color: var(--accent-success);">$0.00</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">PROFIT</div>
-                                <div id="crashProfit" style="font-size: 18px; font-weight: 800; color: var(--accent-warning);">$0.00</div>
-                            </div>
+
+                    <div class="crash-stat-bar">
+                        <div class="crash-stat-item">
+                            <span>Current Bet</span>
+                            <strong id="crashCurrentBet">$0.00</strong>
+                        </div>
+                        <div class="crash-stat-item">
+                            <span>Potential Win</span>
+                            <strong id="crashPotentialWin">$0.00</strong>
+                        </div>
+                        <div class="crash-stat-item">
+                            <span>Profit</span>
+                            <strong id="crashProfit">$0.00</strong>
                         </div>
                     </div>
-                    
-                    <div id="crashHistory" class="crash-history-strip" style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;"></div>
-                </div>
-                
-                <div class="bet-panel">
+
+                    <div class="crash-history-block">
+                        <div class="crash-history-head">
+                            <span>Recent Crashes</span>
+                            <small>Shared table history</small>
+                        </div>
+                        <div id="crashHistory" class="crash-history-strip"></div>
+                    </div>
+                </section>
+
+                <aside class="bet-panel crash-bet-panel">
+                    <div class="crash-bet-panel-head">
+                        <span class="sportsbook-slip-kicker">Crash Control</span>
+                        <strong>One live multiplier for everyone.</strong>
+                        <p>Lock your stake during the countdown, then cash out before the line disappears.</p>
+                    </div>
+
                     <div class="bet-input-group">
-                        <label class="bet-label">Bet Amount</label>
-                        <input type="number" id="crashBetAmount" class="bet-input" placeholder="0.00" min="1" step="0.01">
-                        <div class="quick-bets">
-                            <button class="quick-bet-btn" onclick="setCrashBet(100)">100</button>
-                            <button class="quick-bet-btn" onclick="setCrashBet(1000)">1K</button>
-                            <button class="quick-bet-btn" onclick="setCrashBet(10000)">10K</button>
-                            <button class="quick-bet-btn" onclick="setCrashBet(Math.floor(currentPlayer.balance))">MAX</button>
+                        <span class="bet-label">Bet Amount</span>
+                        <input id="crashBetAmount" class="bet-input" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
+                        <div class="quick-bets sportsbook-quick-bets">
+                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(100000)">100K</button>
+                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(500000)">500K</button>
+                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(1000000)">1M</button>
+                            <button class="quick-bet-btn" type="button" onclick="setCrashBet(Math.floor(currentPlayer.balance))">MAX</button>
                         </div>
                     </div>
-                    
+
                     <div class="bet-input-group">
-                        <label class="bet-label">Auto Cashout (Optional)</label>
+                        <span class="bet-label">Auto Cashout (Optional)</span>
                         <input type="number" id="crashAutoCashout" class="bet-input" placeholder="2.00x" min="1.01" step="0.01">
                     </div>
-                    
-                    <div style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="font-size: 12px; color: var(--text-secondary);">Round Status</span>
-                            <span style="font-size: 12px; font-weight: 700; color: var(--accent-success);" id="crashRoundStatus">Loading...</span>
+
+                    <div class="crash-round-card">
+                        <div class="crash-round-row">
+                            <span>Round Status</span>
+                            <strong id="crashRoundStatus">Loading...</strong>
                         </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="font-size: 12px; color: var(--text-secondary);">Round Timer</span>
-                            <span style="font-size: 12px; font-weight: 700;" id="crashRoundTimer">--</span>
+                        <div class="crash-round-row">
+                            <span>Round Timer</span>
+                            <strong id="crashRoundTimer">--</strong>
                         </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 12px; color: var(--text-secondary);">Auto Cashout</span>
-                            <span style="font-size: 12px; font-weight: 700;" id="crashWinChance">Off</span>
+                        <div class="crash-round-row">
+                            <span>Auto Cashout</span>
+                            <strong id="crashWinChance">Off</strong>
                         </div>
                     </div>
-                    
+
                     <button id="crashBetBtn" class="btn-primary" onclick="startCrashBet()">
-                        <i class="fas fa-rocket"></i> Join Next Round
+                        <i class="fas fa-rocket"></i> Join Round
                     </button>
                     <button id="crashCashoutBtn" class="btn-danger" onclick="crashCashout()" style="display: none; margin-top: 12px;">
                         <i class="fas fa-hand-holding-usd"></i> Cash Out <span id="crashCashoutAmount">$0.00</span>
                     </button>
-                    
-                    <div style="margin-top: 16px; padding: 12px; background: rgba(124, 199, 255, 0.08); border: 1px solid var(--accent-primary); border-radius: 8px; font-size: 12px; color: var(--text-secondary);">
-                        <i class="fas fa-earth-asia"></i> Crash is global now. Everyone joins the same countdown and the same live multiplier.
+
+                    <div class="crash-round-note">
+                        Shared table. One countdown, one live multiplier, one cashout race.
                     </div>
-                </div>
+                </aside>
             </div>
         </div>
     `;
-    
+
+    enhanceAmountInputs(container);
     initCrashGame();
 }
 
@@ -101,6 +112,7 @@ let crashAwaitingBet = false;
 let crashAwaitingCashout = false;
 let crashAutoCashout = 0;
 let crashUiTicker = null;
+let crashResizeObserver = null;
 let jackpotState = null;
 let jackpotPoller = null;
 const CRASH_EDGE = 0.8;
@@ -191,31 +203,32 @@ let challengeModeSelections = {
     wirecut: CHALLENGE_MODE_CONFIG.wirecut.plans[0].id
 };
 const DEAL_NO_DEAL_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
+const DEAL_NO_DEAL_ROUND_SCHEDULE = [5, 4, 3, 2, 1];
 let dealNoDealState = null;
 
 function loadDealnodealGame(container) {
     container.innerHTML = `
         <div class="game-container deal-nodeal-game">
-            <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.4fr) minmax(320px, 0.9fr)">
+            <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.45fr) minmax(320px, 0.9fr)">
                 <section class="deal-stage">
                     <div class="deal-hero">
-                        <span class="banner-tag">New Mode &#8226; 16 Cases</span>
-                        <h3>Pick one case, open six, then stare down the banker.</h3>
-                        <p>Every board scales from your stake. The top case is always 50x, your exact bet sits as the fifth-highest case, and the first banker offer lands after six reveals.</p>
+                        <span class="banner-tag">Deal or No Deal</span>
+                        <h3>Pick your case, open the board, and make the banker sweat.</h3>
+                        <p>The board plays in real rounds: 5, 4, 3, 2, then 1. Every no deal keeps your case alive for the next call, just like the show.</p>
                     </div>
                     <div id="dealNoDealBoard" class="deal-board"></div>
                 </section>
 
                 <aside class="deal-sidebar">
-                    <label class="bet-input-group">
+                    <div class="bet-input-group">
                         <span class="bet-label">Bet Amount</span>
-                        <input id="dealNoDealBetAmount" class="bet-input" type="text" placeholder="10m, 1b, 10b" data-amount-input="true" autocomplete="off">
-                    </label>
+                        <input id="dealNoDealBetAmount" class="bet-input" type="text" placeholder="100k, 1m, 10m" data-amount-input="true" autocomplete="off">
+                    </div>
 
                     <div class="quick-bets sportsbook-quick-bets">
+                        <button class="quick-bet-btn" type="button" data-deal-amount="100000">100K</button>
+                        <button class="quick-bet-btn" type="button" data-deal-amount="1000000">1M</button>
                         <button class="quick-bet-btn" type="button" data-deal-amount="10000000">10M</button>
-                        <button class="quick-bet-btn" type="button" data-deal-amount="1000000000">1B</button>
-                        <button class="quick-bet-btn" type="button" data-deal-amount="10000000000">10B</button>
                         <button class="quick-bet-btn" type="button" data-deal-amount="max">MAX</button>
                     </div>
 
@@ -261,7 +274,7 @@ function getDealNoDealPreviewAmount() {
         return amount;
     }
 
-    return 1e10;
+    return 1e5;
 }
 
 function getDealNoDealBoardAmount() {
@@ -295,20 +308,29 @@ function renderDealNoDealMathPreview() {
     }
 
     const amount = getDealNoDealPreviewAmount();
-    const topCases = DEAL_NO_DEAL_MULTIPLIERS.slice(-5).reverse();
 
     preview.innerHTML = `
-        <span class="sportsbook-slip-kicker">Math Preview</span>
+        <span class="sportsbook-slip-kicker">Board Preview</span>
         <strong>$${formatAmount(amount)} stake map</strong>
         <div class="deal-math-grid">
-            ${topCases.map((multiplier, index) => `
-                <div class="deal-math-row ${index === 4 ? 'is-anchor' : ''}">
-                    <span>${multiplier.toFixed(multiplier >= 10 ? 0 : multiplier >= 1 ? 1 : 2)}x</span>
-                    <strong>$${formatAmount(amount * multiplier)}</strong>
-                </div>
-            `).join('')}
+            <div class="deal-math-row">
+                <span>Rounds</span>
+                <strong>${DEAL_NO_DEAL_ROUND_SCHEDULE.join(' / ')}</strong>
+            </div>
+            <div class="deal-math-row">
+                <span>Low Case</span>
+                <strong>$${formatAmount(amount * DEAL_NO_DEAL_MULTIPLIERS[0])}</strong>
+            </div>
+            <div class="deal-math-row is-anchor">
+                <span>Your Stake Case</span>
+                <strong>$${formatAmount(amount)}</strong>
+            </div>
+            <div class="deal-math-row">
+                <span>Top Case</span>
+                <strong>$${formatAmount(amount * DEAL_NO_DEAL_MULTIPLIERS[DEAL_NO_DEAL_MULTIPLIERS.length - 1])}</strong>
+            </div>
         </div>
-        <p>Your own stake value lands as the fifth-highest case every board. Top case always peaks at $${formatAmount(amount * 50)}.</p>
+        <p>The banker gets stronger each round, but your own case stays sealed until you take a deal or ride it to the end.</p>
     `;
 }
 
@@ -332,20 +354,34 @@ function renderDealNoDealState() {
     const moneyLadder = buildDealNoDealMoneyLadder(cases);
     const openedCount = cases.filter((entry) => entry.opened).length;
     const chosenCase = cases.find((entry) => entry.isChosen) || null;
-    const disabled = !!dealNoDealState?.active || !!dealNoDealState?.resolved;
-    const stageCasesLabel = dealNoDealState?.resolved ? 'Cases Revealed' : 'Cases Opened';
-    const stageCasesValue = dealNoDealState?.resolved ? `${cases.length}/${cases.length}` : `${openedCount}/6`;
-    const boardHeadline = dealNoDealState?.resolved
-        ? 'Final board reveal'
-        : dealNoDealState?.active
-            ? 'Round one complete'
-            : 'Pick your case to start';
-    const boardCopy = dealNoDealState?.resolved
-        ? 'Every amount on the board is open now, so you can compare the banker offer against the hidden case outcome.'
-        : dealNoDealState?.active
-            ? 'Six cases are gone. The banker has priced the remaining board, and your personal case is still sealed.'
-            : 'Choose one case to keep. The first round instantly opens six other cases before the banker calls.';
-    const stageStateClass = dealNoDealState?.resolved ? 'is-resolved' : dealNoDealState?.active ? 'is-live' : 'is-idle';
+    const roundSchedule = Array.isArray(dealNoDealState?.roundSchedule) && dealNoDealState.roundSchedule.length > 0
+        ? dealNoDealState.roundSchedule
+        : DEAL_NO_DEAL_ROUND_SCHEDULE;
+    const totalRounds = roundSchedule.length;
+    const totalCaseOpens = roundSchedule.reduce((sum, step) => sum + Number(step || 0), 0);
+    const currentRound = Math.max(1, Number(dealNoDealState?.currentRound || 1));
+    const casesToOpen = Math.max(0, Number(dealNoDealState?.casesToOpen || 0));
+    const awaitingDecision = !!dealNoDealState?.awaitingDecision;
+    const resolved = !!dealNoDealState?.resolved;
+    const isStarted = !!dealNoDealState?.active;
+    const offerHistory = Array.isArray(dealNoDealState?.offerHistory) ? dealNoDealState.offerHistory : [];
+    const currentOffer = Number.isFinite(Number(dealNoDealState?.bankerOffer)) ? Number(dealNoDealState.bankerOffer) : null;
+    const stageStateClass = resolved ? 'is-resolved' : awaitingDecision ? 'is-live' : isStarted ? 'is-active' : 'is-idle';
+    const boardHeadline = resolved
+        ? 'Final reveal'
+        : !isStarted
+            ? 'Choose your case to start'
+            : awaitingDecision
+                ? `Banker call after round ${currentRound}`
+                : `Round ${currentRound}: open ${casesToOpen} more ${casesToOpen === 1 ? 'case' : 'cases'}`;
+    const boardCopy = resolved
+        ? 'The full board is open now, so you can see exactly what the banker was buying and what you kept hidden.'
+        : !isStarted
+            ? 'Pick one case to keep. After that, you open the board in live show rounds: 5, 4, 3, 2, then 1.'
+            : awaitingDecision
+                ? 'The banker has priced the remaining board. Deal out now, or keep your case alive and push the next round.'
+                : `Your case stays sealed while you open ${casesToOpen} more ${casesToOpen === 1 ? 'case' : 'cases'} this round.`;
+    const chosenCaseLabel = chosenCase ? `#${String(chosenCase.label).padStart(2, '0')}` : '--';
 
     board.innerHTML = `
         <div class="deal-stage-shell ${stageStateClass}">
@@ -358,11 +394,15 @@ function renderDealNoDealState() {
                 <div class="deal-stage-stats">
                     <div class="deal-stage-stat">
                         <span>Round</span>
-                        <strong>1 / 1</strong>
+                        <strong>${resolved ? totalRounds : currentRound} / ${totalRounds}</strong>
                     </div>
                     <div class="deal-stage-stat">
-                        <span>${stageCasesLabel}</span>
-                        <strong>${stageCasesValue}</strong>
+                        <span>${resolved ? 'Cases Opened' : 'This Round'}</span>
+                        <strong>${resolved ? `${cases.length}/${cases.length}` : awaitingDecision ? 'Banker Call' : `${casesToOpen} Left`}</strong>
+                    </div>
+                    <div class="deal-stage-stat">
+                        <span>Your Case</span>
+                        <strong>${chosenCaseLabel}</strong>
                     </div>
                     <div class="deal-stage-stat">
                         <span>Top Prize</span>
@@ -381,23 +421,50 @@ function renderDealNoDealState() {
                     `).join('')}
                 </div>
 
-                <div class="deal-case-grid">
+                <div class="deal-board-core">
+                    <div class="deal-player-case ${chosenCase ? 'is-locked' : ''} ${resolved ? 'is-revealed' : ''}">
+                        <span>Your Case</span>
+                        <strong>${chosenCaseLabel}</strong>
+                        <small>${!chosenCase
+                            ? 'Pick one to begin'
+                            : resolved
+                                ? `$${formatAmount(chosenCase?.value || 0)}`
+                                : 'Still sealed'}</small>
+                    </div>
+
+                    <div class="deal-case-grid">
                     ${cases.map((entry) => {
                         const buttonClass = [
                             'deal-case',
                             entry.opened ? 'is-opened' : '',
                             entry.isChosen ? 'is-chosen' : '',
-                            dealNoDealState?.resolved ? 'is-resolved' : ''
+                            resolved ? 'is-resolved' : ''
                         ].filter(Boolean).join(' ');
+                        const isDisabled = resolved
+                            || awaitingDecision
+                            || (isStarted ? entry.opened || entry.isChosen : false);
+                        const actionHandler = !isStarted
+                            ? `startDealNoDeal(${entry.index})`
+                            : !isDisabled
+                                ? `openDealNoDealCase(${entry.index})`
+                                : '';
+                        const detailLabel = entry.value === null
+                            ? !isStarted
+                                ? 'Choose Case'
+                                : entry.isChosen
+                                    ? 'Keep Safe'
+                                    : 'Open Case'
+                            : `$${formatAmount(entry.value)}`;
 
                         return `
-                            <button class="${buttonClass}" type="button" ${disabled ? 'disabled' : ''} onclick="startDealNoDeal(${entry.index})">
+                            <button class="${buttonClass}" type="button" ${isDisabled ? 'disabled' : ''} ${actionHandler ? `onclick="${actionHandler}"` : ''}>
                                 <span class="deal-case-number">${String(entry.label).padStart(2, '0')}</span>
-                                <strong>${entry.value === null ? 'Tap To Lock' : `$${formatAmount(entry.value)}`}</strong>
+                                <strong>${detailLabel}</strong>
                                 <span class="deal-case-status">${entry.isChosen ? 'Your Case' : entry.opened ? 'Opened' : 'Sealed'}</span>
                             </button>
                         `;
                     }).join('')}
+                    </div>
                 </div>
 
                 <div class="deal-value-column">
@@ -412,24 +479,28 @@ function renderDealNoDealState() {
         </div>
     `;
 
-    if (!dealNoDealState?.active && !dealNoDealState?.resolved) {
+    if (!isStarted && !resolved) {
         offer.innerHTML = `
             <span class="sportsbook-slip-kicker">Banker Offer</span>
             <strong>Pick one of the 16 cases to start.</strong>
-            <p>Six cases get cracked immediately, then the banker throws one offer at you.</p>
+            <p>Your first banker call comes after the first five openings.</p>
         `;
-        actions.innerHTML = '<div class="deal-note">Choose a case from the board to spin up the banker room.</div>';
-        result.innerHTML = '';
+        actions.innerHTML = '<div class="deal-note">Choose the case you want to keep, then start opening the board.</div>';
+        result.innerHTML = `
+            <span class="sportsbook-slip-kicker">Round Path</span>
+            <strong>${roundSchedule.join(' / ')}</strong>
+            <p>Five cases in the first round, then four, three, two, and one for the final call.</p>
+        `;
         return;
     }
 
-    if (dealNoDealState?.resolved) {
-        const tookDeal = dealNoDealState.resolution === 'deal';
+    if (resolved) {
+        const tookDeal = dealNoDealState?.resolution === 'deal';
         offer.innerHTML = `
             <span class="sportsbook-slip-kicker">Final Resolution</span>
             <strong>${tookDeal ? 'Deal taken' : 'No deal played out'}</strong>
             <p>${tookDeal
-                ? `Banker paid $${formatAmount(dealNoDealState.bankerOffer || 0)} before the final reveal.`
+                ? `Banker paid $${formatAmount(dealNoDealState?.bankerOffer || offerHistory.at(-1)?.offer || 0)} before the last case was opened.`
                 : `Your locked case was worth $${formatAmount(chosenCase?.value || 0)}.`}</p>
         `;
         actions.innerHTML = '<button class="btn-primary" type="button" onclick="resetDealNoDealBoard()">Play Another Board</button>';
@@ -437,29 +508,60 @@ function renderDealNoDealState() {
             <span class="sportsbook-slip-kicker">Result</span>
             <strong>${tookDeal ? 'Offer accepted' : `Case ${chosenCase?.label || '--'} revealed`}</strong>
             <p>${tookDeal
-                ? `You stopped at $${formatAmount(dealNoDealState.bankerOffer || 0)}.`
+                ? `You stopped at $${formatAmount(dealNoDealState?.bankerOffer || offerHistory.at(-1)?.offer || 0)}.`
                 : `You rode the final case for $${formatAmount(chosenCase?.value || 0)}.`}</p>
+            ${offerHistory.length > 0 ? `
+                <div class="deal-offer-history">
+                    ${offerHistory.map((entry) => `
+                        <div class="deal-offer-history-row">
+                            <span>Round ${entry.round}</span>
+                            <strong>$${formatAmount(entry.offer)}</strong>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
         `;
         return;
     }
 
-    if (dealNoDealState?.active) {
+    if (awaitingDecision) {
         offer.innerHTML = `
             <span class="sportsbook-slip-kicker">Banker Offer</span>
-            <strong>$${formatAmount(dealNoDealState.bankerOffer || 0)}</strong>
-            <p>The banker is pricing the average of the remaining board after the first six reveals.</p>
+            <strong>$${formatAmount(currentOffer || 0)}</strong>
+            <p>The board is set. Take the cash now, or say no deal and keep your case alive.</p>
         `;
         actions.innerHTML = `
             <button class="btn-primary" type="button" onclick="resolveDealNoDeal('deal')">Deal</button>
             <button class="btn-secondary" type="button" onclick="resolveDealNoDeal('no-deal')">No Deal</button>
         `;
         result.innerHTML = `
-            <span class="sportsbook-slip-kicker">Board Status</span>
-            <strong>Your case is locked.</strong>
-            <p>Opened cases show their value. The chosen case stays sealed until you take the offer or reveal it.</p>
+            <span class="sportsbook-slip-kicker">Call History</span>
+            <strong>${offerHistory.length} banker ${offerHistory.length === 1 ? 'offer' : 'offers'} logged.</strong>
+            <div class="deal-offer-history">
+                ${offerHistory.map((entry) => `
+                    <div class="deal-offer-history-row">
+                        <span>Round ${entry.round}</span>
+                        <strong>$${formatAmount(entry.offer)}</strong>
+                    </div>
+                `).join('')}
+            </div>
         `;
         return;
     }
+
+    offer.innerHTML = `
+        <span class="sportsbook-slip-kicker">Open Cases</span>
+        <strong>${casesToOpen} ${casesToOpen === 1 ? 'case' : 'cases'} left this round</strong>
+        <p>Keep opening cases until the banker calls again. Your locked case stays sealed in the middle.</p>
+    `;
+    actions.innerHTML = '<div class="deal-note">Tap any sealed case except your own.</div>';
+    result.innerHTML = `
+        <span class="sportsbook-slip-kicker">Board Status</span>
+        <strong>${openedCount} of ${totalCaseOpens} board cases opened.</strong>
+        <p>${offerHistory.length > 0
+            ? `Last banker call was $${formatAmount(offerHistory.at(-1).offer)}.`
+            : 'No banker call yet. First one lands after round one.'}</p>
+    `;
 }
 
 async function refreshDealNoDealState() {
@@ -485,7 +587,7 @@ async function refreshDealNoDealState() {
 }
 
 async function startDealNoDeal(caseIndex) {
-    if (dealNoDealState?.active) {
+    if (dealNoDealState?.active && !dealNoDealState?.resolved) {
         showNotification('Finish the active board first.', 'info');
         return;
     }
@@ -527,7 +629,7 @@ async function startDealNoDeal(caseIndex) {
         dealNoDealState = data.dealNoDeal || null;
         renderDealNoDealState();
         playGameSound('reveal');
-        showNotification(`Banker opens at $${formatAmount(data.dealNoDeal?.bankerOffer || 0)}.`, 'success');
+        showNotification(`Case ${String(caseIndex + 1).padStart(2, '0')} locked. Open ${data.dealNoDeal?.casesToOpen || DEAL_NO_DEAL_ROUND_SCHEDULE[0]} cases.`, 'success');
     } catch (error) {
         console.error('Deal or No Deal start failed:', error);
         playGameSound('explode');
@@ -537,8 +639,49 @@ async function startDealNoDeal(caseIndex) {
     }
 }
 
+async function openDealNoDealCase(caseIndex) {
+    if (!dealNoDealState?.active || dealNoDealState?.awaitingDecision || dealNoDealState?.resolved) {
+        return;
+    }
+
+    if (!startGameAction('dealnodeal:open', GAME_COOLDOWN_MS)) {
+        return;
+    }
+
+    playGameSound('shuffle');
+
+    try {
+        const response = await fetch('/api/game/deal-or-no-deal/open-case', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caseIndex })
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Could not open that case');
+        }
+
+        dealNoDealState = data.dealNoDeal || null;
+        renderDealNoDealState();
+        playGameSound(data.dealNoDeal?.awaitingDecision ? 'reveal' : 'toggle-on');
+
+        if (data.dealNoDeal?.awaitingDecision) {
+            showNotification(`Banker calls with $${formatAmount(data.dealNoDeal?.bankerOffer || 0)}.`, 'success');
+        } else {
+            showNotification(`Case ${String(caseIndex + 1).padStart(2, '0')} opened. ${data.dealNoDeal?.casesToOpen || 0} left this round.`, 'info');
+        }
+    } catch (error) {
+        console.error('Deal or No Deal open-case failed:', error);
+        playGameSound('explode');
+        showNotification(error.message || 'Could not open that case', 'error');
+    } finally {
+        finishGameAction('dealnodeal:open', GAME_COOLDOWN_MS);
+    }
+}
+
 async function resolveDealNoDeal(choice) {
-    if (!dealNoDealState?.active) {
+    if (!dealNoDealState?.active || !dealNoDealState?.awaitingDecision) {
         showNotification('No active board to resolve.', 'error');
         return;
     }
@@ -564,13 +707,18 @@ async function resolveDealNoDeal(choice) {
         hydratePlayerStateFromResult(data);
         dealNoDealState = data.dealNoDeal || null;
         renderDealNoDealState();
-        playGameSound(route === 'deal' || data.won ? 'cashout' : 'explode');
-        showNotification(
-            route === 'deal'
-                ? `Banker paid $${formatAmount(data.payout || 0)}.`
-                : `Final case revealed for $${formatAmount(data.payout || 0)}.`,
-            data.won ? 'success' : 'info'
-        );
+        if (data.dealNoDeal?.resolved) {
+            playGameSound(route === 'deal' || data.won ? 'cashout' : 'explode');
+            showNotification(
+                route === 'deal'
+                    ? `Banker paid $${formatAmount(data.payout || 0)}.`
+                    : `Final case revealed for $${formatAmount(data.payout || 0)}.`,
+                data.won ? 'success' : 'info'
+            );
+        } else {
+            playGameSound('toggle-on');
+            showNotification(`No deal. Open ${data.dealNoDeal?.casesToOpen || 0} more ${data.dealNoDeal?.casesToOpen === 1 ? 'case' : 'cases'} in round ${data.dealNoDeal?.currentRound || 1}.`, 'info');
+        }
     } catch (error) {
         console.error('Deal or No Deal resolve failed:', error);
         playGameSound('explode');
@@ -582,6 +730,7 @@ async function resolveDealNoDeal(choice) {
 
 function resetDealNoDealBoard() {
     dealNoDealState = null;
+    renderDealNoDealMathPreview();
     renderDealNoDealState();
 }
 
@@ -637,6 +786,11 @@ function cleanupGameRuntime() {
         crashAnimationFrame = null;
     }
 
+    if (crashResizeObserver) {
+        crashResizeObserver.disconnect();
+        crashResizeObserver = null;
+    }
+
     plinkoRuntimeToken += 1;
     plinkoAnimating = false;
     plinkoActiveDrops = 0;
@@ -651,9 +805,18 @@ function cleanupGameRuntime() {
 
 function initCrashGame() {
     crashCanvas = document.getElementById('crashCanvas');
+    if (!crashCanvas) {
+        return;
+    }
+
     crashCtx = crashCanvas.getContext('2d');
     crashCanvas.width = 800;
     crashCanvas.height = 460;
+
+    if (crashAnimationFrame) {
+        cancelAnimationFrame(crashAnimationFrame);
+        crashAnimationFrame = null;
+    }
 
     if (crashUiTicker) {
         clearInterval(crashUiTicker);
@@ -682,6 +845,23 @@ function initCrashGame() {
 
 function setCrashBet(amount) {
     setAmountInputValue('crashBetAmount', amount);
+}
+
+function startCrashRenderLoop() {
+    if (crashAnimationFrame) {
+        return;
+    }
+
+    const renderFrame = () => {
+        crashAnimationFrame = null;
+        drawCrashGraph();
+
+        if (crashGameRunning || crashParticles.length > 0) {
+            crashAnimationFrame = requestAnimationFrame(renderFrame);
+        }
+    };
+
+    crashAnimationFrame = requestAnimationFrame(renderFrame);
 }
 
 async function loadCrashState() {
@@ -760,6 +940,12 @@ function syncCrashGraphState(state) {
         crashStagePanel.classList.toggle('is-live', phase === 'running');
         crashStagePanel.classList.toggle('is-crashed', phase === 'crashed');
     }
+
+    if (crashGameRunning || crashParticles.length > 0) {
+        startCrashRenderLoop();
+    } else {
+        drawCrashGraph();
+    }
 }
 
 function handleCrashRealtimeState(state) {
@@ -783,7 +969,9 @@ function handleCrashRealtimeState(state) {
 
     updateCrashHistory();
     updateCrashPanel();
-    drawCrashGraph();
+    if (!crashGameRunning) {
+        drawCrashGraph();
+    }
 }
 
 function handleCrashBetSettlement(payload) {
@@ -819,7 +1007,9 @@ function handleCrashBetSettlement(payload) {
     }
 
     updateCrashPanel();
-    drawCrashGraph();
+    if (!crashGameRunning) {
+        drawCrashGraph();
+    }
 }
 
 function drawCrashGraph() {
@@ -936,9 +1126,6 @@ function drawCrashGraph() {
         }
     });
     
-    if (crashGameRunning) {
-        crashAnimationFrame = requestAnimationFrame(drawCrashGraph);
-    }
 }
 
 function createCrashParticles(x, y, color) {
@@ -953,6 +1140,8 @@ function createCrashParticles(x, y, color) {
             color: color
         });
     }
+
+    startCrashRenderLoop();
 }
 
 function updateCrashPanel() {
@@ -1075,10 +1264,6 @@ function startCrashBet() {
         return;
     }
 
-    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Plinko bet')) {
-        return;
-    }
-
     if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Crash bet')) {
         return;
     }
@@ -1137,7 +1322,7 @@ function startCrashBet() {
             }
         }, 50);
 
-        drawCrashGraph();
+        startCrashRenderLoop();
         updateCrashPanel();
         return;
     }
@@ -1264,15 +1449,7 @@ async function crashEnd(won) {
     }
     
     updateCrashPanel();
-    
-    // Continue animation for particles
-    const particleAnimation = () => {
-        drawCrashGraph();
-        if (crashParticles.length > 0) {
-            requestAnimationFrame(particleAnimation);
-        }
-    };
-    particleAnimation();
+    drawCrashGraph();
     
     setTimeout(() => {
         document.getElementById('crashMultiplierOverlay').style.color = '';

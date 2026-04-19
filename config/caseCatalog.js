@@ -1,4 +1,4 @@
-const PRICE_START = 100;
+const PRICE_START = 100000;
 const PRICE_END = 1e15;
 const CASE_COUNT = 50;
 

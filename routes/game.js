@@ -23,7 +23,7 @@ const LIMBO_MAX_TARGET = 25;
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
 const MAX_PLINKO_ROWS = 16;
-const MIN_GAME_BET = 1e6;
+const MIN_GAME_BET = 1e5;
 const MAX_GAME_BET = 5e15;
 const CRASH_INSTANT_BUST_CHANCE = 0.065;
 const CRASH_BETTING_WINDOW_MS = 8000;
@@ -51,8 +51,8 @@ const ROULETTE_SEGMENTS = [
 const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
 const COINFLIP_PAYOUT = 2;
 const DEAL_NO_DEAL_CASE_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
-const DEAL_NO_DEAL_REVEAL_COUNT = 6;
-const DEAL_NO_DEAL_OFFER_FACTOR = 0.78;
+const DEAL_NO_DEAL_ROUND_SCHEDULE = [5, 4, 3, 2, 1];
+const DEAL_NO_DEAL_OFFER_FACTORS = [0.72, 0.78, 0.84, 0.9, 0.96];
 const DEAL_NO_DEAL_SESSION_TTL_MS = 30 * 60 * 1000;
 const PLINKO_RISK_CONFIG = {
     low: { label: 'Low', targetEv: 0.78, centerFloor: 0.46, edgeBase: 2.7, edgeGrowth: 0.14, curve: 1.42 },
@@ -240,11 +240,26 @@ function buildError(status, message) {
 
 function formatBetLimit(value) {
     const amount = Number(value || 0);
-    if (amount >= 1e15) return `${toMoney(amount / 1e15)}Q`;
-    if (amount >= 1e12) return `${toMoney(amount / 1e12)}T`;
-    if (amount >= 1e9) return `${toMoney(amount / 1e9)}B`;
-    if (amount >= 1e6) return `${toMoney(amount / 1e6)}M`;
-    if (amount >= 1e3) return `${toMoney(amount / 1e3)}K`;
+    const tiers = [
+        ['DC', 1e33],
+        ['NO', 1e30],
+        ['OC', 1e27],
+        ['SP', 1e24],
+        ['SX', 1e21],
+        ['QT', 1e18],
+        ['Q', 1e15],
+        ['T', 1e12],
+        ['B', 1e9],
+        ['M', 1e6],
+        ['K', 1e3]
+    ];
+
+    for (const [suffix, threshold] of tiers) {
+        if (amount >= threshold) {
+            return `${toMoney(amount / threshold)}${suffix}`;
+        }
+    }
+
     return `${toMoney(amount)}`;
 }
 
@@ -416,24 +431,29 @@ function buildDealNoDealBoard(amount, profile, nonceUsed) {
     }));
 }
 
-function buildDealNoDealOpenedIndices(chosenCaseIndex, profile, nonceUsed) {
-    const available = Array.from({ length: DEAL_NO_DEAL_CASE_MULTIPLIERS.length }, (_, index) => index)
-        .filter((index) => index !== chosenCaseIndex);
-    const opened = [];
-
-    for (let step = 0; step < DEAL_NO_DEAL_REVEAL_COUNT && available.length > 0; step += 1) {
-        const pickIndex = Math.floor(seededRoll(profile, nonceUsed, 60 + step) * available.length);
-        opened.push(available.splice(pickIndex, 1)[0]);
-    }
-
-    return opened.sort((left, right) => left - right);
-}
-
-function calculateDealNoDealOffer(board, chosenCaseIndex, openedIndices) {
+function calculateDealNoDealOffer(board, chosenCaseIndex, openedIndices, roundIndex = 0) {
     const openedSet = new Set(openedIndices);
     const remaining = board.filter((entry, index) => index === chosenCaseIndex || !openedSet.has(index));
     const averageRemaining = remaining.reduce((total, entry) => total + Number(entry.value || 0), 0) / Math.max(1, remaining.length);
-    return toMoney(averageRemaining * DEAL_NO_DEAL_OFFER_FACTOR);
+    const factor = DEAL_NO_DEAL_OFFER_FACTORS[Math.min(
+        Math.max(0, Number(roundIndex || 0)),
+        DEAL_NO_DEAL_OFFER_FACTORS.length - 1
+    )];
+
+    return toMoney(averageRemaining * factor);
+}
+
+function getDealNoDealRoundSchedule(session = null) {
+    const schedule = session?.roundSchedule;
+    return Array.isArray(schedule) && schedule.length > 0
+        ? schedule.map((value) => Math.max(0, Number(value || 0)))
+        : DEAL_NO_DEAL_ROUND_SCHEDULE.slice();
+}
+
+function getDealNoDealCurrentRoundSize(session = null) {
+    const schedule = getDealNoDealRoundSchedule(session);
+    const roundIndex = Math.max(0, Number(session?.currentRoundIndex || 0));
+    return schedule[Math.min(roundIndex, schedule.length - 1)] || 0;
 }
 
 function getDealNoDealSession(username) {
@@ -469,15 +489,35 @@ function serializeDealNoDealState(session, options = {}) {
 
     const revealAll = !!options.revealAll;
     const openedSet = new Set(session.openedIndices || []);
+    const roundSchedule = getDealNoDealRoundSchedule(session);
+    const currentRoundIndex = Math.max(0, Number(session.currentRoundIndex || 0));
+    const currentRound = Math.min(currentRoundIndex + 1, roundSchedule.length);
+    const currentRoundSize = getDealNoDealCurrentRoundSize(session);
+    const openedThisRound = Math.max(0, Number(session.openedThisRound || 0));
+    const casesToOpen = Math.max(0, Number(session.casesToOpen ?? Math.max(0, currentRoundSize - openedThisRound)));
+    const offerHistory = Array.isArray(session.offerHistory)
+        ? session.offerHistory.map((entry) => ({
+            round: Math.max(1, Number(entry.round || 1)),
+            offer: toMoney(entry.offer || 0)
+        }))
+        : [];
 
     return {
         active: true,
         amount: session.amount,
-        bankerOffer: session.bankerOffer,
+        bankerOffer: session.bankerOffer ?? null,
         chosenCaseIndex: session.chosenCaseIndex,
+        chosenCaseNumber: session.board[session.chosenCaseIndex]?.caseNumber || null,
         startedAt: session.startedAt,
+        currentRound,
+        roundSchedule,
+        casesToOpen: revealAll || session.resolved || session.awaitingDecision ? 0 : casesToOpen,
+        openedThisRound: revealAll || session.resolved ? currentRoundSize : openedThisRound,
+        casesOpened: revealAll || session.resolved ? session.board.length : openedSet.size,
+        awaitingDecision: !!session.awaitingDecision,
         resolved: !!session.resolved,
         resolution: session.resolution || null,
+        offerHistory,
         cases: session.board.map((entry, index) => {
             const shouldReveal = revealAll || session.resolved || openedSet.has(index) || (session.resolution === 'no-deal' && index === session.chosenCaseIndex);
             return {
@@ -1418,6 +1458,10 @@ async function finalizeDealNoDealSession(username, resolution) {
         return buildError(404, 'No active Deal or No Deal board found');
     }
 
+    if (!session.awaitingDecision) {
+        return buildError(409, 'Finish opening the current round before answering the banker');
+    }
+
     const safeResolution = resolution === 'deal' ? 'deal' : 'no-deal';
     const chosenCase = session.board[session.chosenCaseIndex];
     const payout = safeResolution === 'deal'
@@ -1466,6 +1510,7 @@ async function finalizeDealNoDealSession(username, resolution) {
                     bankerOffer: session.bankerOffer,
                     chosenCaseNumber: chosenCase?.caseNumber || null,
                     chosenCaseValue: chosenCase?.value || 0,
+                    offerHistory: Array.isArray(session.offerHistory) ? session.offerHistory : [],
                     openedCases: session.openedIndices.map((index) => ({
                         caseNumber: session.board[index]?.caseNumber,
                         value: session.board[index]?.value
@@ -1484,7 +1529,8 @@ async function finalizeDealNoDealSession(username, resolution) {
         const resolvedState = serializeDealNoDealState({
             ...session,
             resolved: true,
-            resolution: safeResolution
+            resolution: safeResolution,
+            awaitingDecision: false
         }, { revealAll: true });
 
         clearDealNoDealSession(username);
@@ -1698,11 +1744,10 @@ router.post('/deal-or-no-deal/start', requireAuth, async (req, res) => {
         const profile = await getOrCreateFairProfile(connection, username, { forUpdate: true });
         const nonceUsed = Number(profile.nonce || 0);
         const board = buildDealNoDealBoard(amount, profile, nonceUsed);
-        const openedIndices = buildDealNoDealOpenedIndices(chosenCaseIndex, profile, nonceUsed);
-        const bankerOffer = calculateDealNoDealOffer(board, chosenCaseIndex, openedIndices);
         const startedAt = Date.now();
         const newBalance = toMoney(currentBalance - amount);
         const requestId = sanitizeRequestId(`dealnodeal:${username}:${startedAt}`);
+        const roundSchedule = DEAL_NO_DEAL_ROUND_SCHEDULE.slice();
 
         await connection.query('UPDATE players SET wallet_balance = ? WHERE username = ?', [newBalance, username]);
         await connection.query('UPDATE provably_fair_profiles SET nonce = nonce + 1 WHERE username = ?', [username]);
@@ -1712,8 +1757,14 @@ router.post('/deal-or-no-deal/start', requireAuth, async (req, res) => {
             username,
             amount,
             chosenCaseIndex,
-            openedIndices,
-            bankerOffer,
+            openedIndices: [],
+            bankerOffer: null,
+            awaitingDecision: false,
+            roundSchedule,
+            currentRoundIndex: 0,
+            openedThisRound: 0,
+            casesToOpen: roundSchedule[0],
+            offerHistory: [],
             board,
             requestId,
             startedAt
@@ -1740,6 +1791,66 @@ router.post('/deal-or-no-deal/start', requireAuth, async (req, res) => {
     }
 });
 
+router.post('/deal-or-no-deal/open-case', requireAuth, (req, res) => {
+    const username = req.session.username;
+    const session = getDealNoDealSession(username);
+    const caseIndex = Number.parseInt(req.body.caseIndex, 10);
+
+    if (!claimServerActionCooldown(username, 'dealnodeal:open', 450)) {
+        return res.status(429).json({ success: false, message: 'Slow down before opening the next case' });
+    }
+
+    if (!session) {
+        return res.status(404).json({ success: false, message: 'No active Deal or No Deal board found' });
+    }
+
+    if (session.awaitingDecision) {
+        return res.status(409).json({ success: false, message: 'Answer the banker before opening more cases' });
+    }
+
+    if (!Number.isInteger(caseIndex) || caseIndex < 0 || caseIndex >= DEAL_NO_DEAL_CASE_MULTIPLIERS.length) {
+        return res.status(400).json({ success: false, message: 'Choose one of the sealed cases on the board' });
+    }
+
+    if (caseIndex === session.chosenCaseIndex) {
+        return res.status(400).json({ success: false, message: 'That is your locked case' });
+    }
+
+    if ((session.openedIndices || []).includes(caseIndex)) {
+        return res.status(400).json({ success: false, message: 'That case is already open' });
+    }
+
+    const nextOpenedIndices = [...(session.openedIndices || []), caseIndex];
+    const nextOpenedThisRound = Math.max(0, Number(session.openedThisRound || 0)) + 1;
+    const currentRoundIndex = Math.max(0, Number(session.currentRoundIndex || 0));
+    const currentRoundSize = getDealNoDealCurrentRoundSize(session);
+    const roundFinished = nextOpenedThisRound >= currentRoundSize;
+    const bankerOffer = roundFinished
+        ? calculateDealNoDealOffer(session.board, session.chosenCaseIndex, nextOpenedIndices, currentRoundIndex)
+        : null;
+
+    session.openedIndices = nextOpenedIndices;
+    session.openedThisRound = roundFinished ? currentRoundSize : nextOpenedThisRound;
+    session.casesToOpen = roundFinished ? 0 : Math.max(0, currentRoundSize - nextOpenedThisRound);
+    session.awaitingDecision = roundFinished;
+    session.bankerOffer = bankerOffer;
+
+    if (roundFinished) {
+        session.offerHistory = [
+            ...(Array.isArray(session.offerHistory) ? session.offerHistory : []),
+            {
+                round: currentRoundIndex + 1,
+                offer: bankerOffer
+            }
+        ];
+    }
+
+    return res.json({
+        success: true,
+        dealNoDeal: serializeDealNoDealState(session)
+    });
+});
+
 router.post('/deal-or-no-deal/deal', requireAuth, async (req, res) => {
     const username = req.session.username;
 
@@ -1757,9 +1868,34 @@ router.post('/deal-or-no-deal/deal', requireAuth, async (req, res) => {
 
 router.post('/deal-or-no-deal/no-deal', requireAuth, async (req, res) => {
     const username = req.session.username;
+    const session = getDealNoDealSession(username);
 
     if (!claimServerActionCooldown(username, 'dealnodeal:no-deal', 900)) {
         return res.status(429).json({ success: false, message: 'Slow down before revealing the final case' });
+    }
+
+    if (!session) {
+        return res.status(404).json({ success: false, message: 'No active Deal or No Deal board found' });
+    }
+
+    if (!session.awaitingDecision) {
+        return res.status(409).json({ success: false, message: 'Open the remaining cases before answering the banker' });
+    }
+
+    const roundSchedule = getDealNoDealRoundSchedule(session);
+    const isFinalRound = Math.max(0, Number(session.currentRoundIndex || 0)) >= roundSchedule.length - 1;
+
+    if (!isFinalRound) {
+        session.awaitingDecision = false;
+        session.bankerOffer = null;
+        session.currentRoundIndex = Math.max(0, Number(session.currentRoundIndex || 0)) + 1;
+        session.openedThisRound = 0;
+        session.casesToOpen = getDealNoDealCurrentRoundSize(session);
+
+        return res.json({
+            success: true,
+            dealNoDeal: serializeDealNoDealState(session)
+        });
     }
 
     const result = await finalizeDealNoDealSession(username, 'no-deal');
