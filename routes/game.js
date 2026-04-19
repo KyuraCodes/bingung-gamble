@@ -18,6 +18,7 @@ const GENERIC_BET_EDGE = 0.8;
 const DICE_EDGE = 0.78;
 const LIMBO_EDGE = 0.68;
 const CRASH_EDGE = 0.8;
+const CRASH_GROWTH_RATE = 0.136;
 const LIMBO_MAX_TARGET = 25;
 const DEFAULT_PLINKO_ROWS = 8;
 const MIN_PLINKO_ROWS = 8;
@@ -48,7 +49,11 @@ const ROULETTE_SEGMENTS = [
     { color: 'black', label: '14' }
 ];
 const ROULETTE_PAYOUTS = { red: 1.78, black: 1.78, green: 8 };
-const COINFLIP_PAYOUT = 1.78;
+const COINFLIP_PAYOUT = 2;
+const DEAL_NO_DEAL_CASE_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
+const DEAL_NO_DEAL_REVEAL_COUNT = 6;
+const DEAL_NO_DEAL_OFFER_FACTOR = 0.74;
+const DEAL_NO_DEAL_SESSION_TTL_MS = 30 * 60 * 1000;
 const PLINKO_RISK_CONFIG = {
     low: { label: 'Low', targetEv: 0.78, centerFloor: 0.46, edgeBase: 2.7, edgeGrowth: 0.14, curve: 1.42 },
     medium: { label: 'Medium', targetEv: 0.68, centerFloor: 0.1, edgeBase: 4.8, edgeGrowth: 0.26, curve: 1.18 },
@@ -64,33 +69,33 @@ const JACKPOT_ROUND_MS = 30000;
 const SPORTSBOOK_EDGE = 0.84;
 const SPORTSBOOK_FIXTURES = [
     {
-        id: 'night-run',
+        id: 'bot-hoops',
         sport: 'Basketball',
-        league: 'Night Run League',
-        home: 'Metro Owls',
-        away: 'Neon Vipers',
+        league: 'Bot Arena',
+        home: 'You',
+        away: 'Pulse Bot',
         scoreMode: 'points',
         suffix: '',
-        totalLine: 214.5,
+        totalLine: 201.5,
         markets: [
-            { id: 'home', label: 'Metro Owls', odds: 1.84, kind: 'home' },
-            { id: 'away', label: 'Neon Vipers', odds: 2.02, kind: 'away' },
-            { id: 'over', label: 'Over 214.5', odds: 1.96, kind: 'over', line: 214.5 }
+            { id: 'home', label: 'You', odds: 1.94, kind: 'home' },
+            { id: 'away', label: 'Pulse Bot', odds: 1.94, kind: 'away' },
+            { id: 'over', label: 'Over 201.5', odds: 1.9, kind: 'over', line: 201.5 }
         ]
     },
     {
-        id: 'harbor-clash',
-        sport: 'Football',
-        league: 'Harbor Premier',
-        home: 'Harbor FC',
-        away: 'Goldcrest United',
+        id: 'goal-bot',
+        sport: 'Soccer',
+        league: 'Bot Cup',
+        home: 'You',
+        away: 'Keeper Bot',
         scoreMode: 'goals',
         suffix: '',
         totalLine: 2.5,
         markets: [
-            { id: 'home', label: 'Harbor FC', odds: 2.1, kind: 'home' },
-            { id: 'away', label: 'Goldcrest United', odds: 2.62, kind: 'away' },
-            { id: 'over', label: 'Over 2.5', odds: 2.04, kind: 'over', line: 2.5 }
+            { id: 'home', label: 'You', odds: 2.02, kind: 'home' },
+            { id: 'away', label: 'Keeper Bot', odds: 1.86, kind: 'away' },
+            { id: 'over', label: 'Over 2.5', odds: 2.08, kind: 'over', line: 2.5 }
         ]
     },
     {
@@ -128,6 +133,7 @@ const KNOWN_GAME_TYPES = new Set([
     'casino',
     'crash',
     'sports',
+    'dealnodeal',
     'mines',
     'towers',
     'plinko',
@@ -147,6 +153,7 @@ const MAX_MULTIPLIER_BY_GAME = {
     casino: 40,
     crash: 80,
     sports: 4,
+    dealnodeal: 50,
     mines: 6.5,
     towers: 3.6,
     plinko: 30,
@@ -163,6 +170,7 @@ const MAX_MULTIPLIER_BY_GAME = {
 let crashIo = null;
 let crashRoundCounter = 0;
 const serverActionCooldowns = new Map();
+const dealNoDealSessions = new Map();
 let jackpotRoundCounter = 0;
 const jackpotRoundState = {
     roundId: Date.now(),
@@ -206,6 +214,10 @@ function sanitizeGameType(gameType) {
         .slice(0, 32);
 
     return KNOWN_GAME_TYPES.has(safeValue) ? safeValue : 'casino';
+}
+
+function getFairnessSupportedGames() {
+    return ['cases', 'dealnodeal', ...SERVER_PLAY_GAME_TYPES];
 }
 
 function claimServerActionCooldown(username, actionKey, cooldownMs = GAME_ACTION_SERVER_COOLDOWN_MS) {
@@ -420,6 +432,95 @@ function buildSportsbookPresentation({ fixture, market, won, profile, nonceUsed 
     }
 
     return buildSportsbookPointsScore({ fixture, market, won, profile, nonceUsed });
+}
+
+function buildDealNoDealBoard(amount, profile, nonceUsed) {
+    const board = DEAL_NO_DEAL_CASE_MULTIPLIERS.map((multiplier) => toMoney(amount * multiplier));
+
+    for (let index = board.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(seededRoll(profile, nonceUsed, 20 + index) * (index + 1));
+        [board[index], board[swapIndex]] = [board[swapIndex], board[index]];
+    }
+
+    return board.map((value, index) => ({
+        caseNumber: index + 1,
+        value
+    }));
+}
+
+function buildDealNoDealOpenedIndices(chosenCaseIndex, profile, nonceUsed) {
+    const available = Array.from({ length: DEAL_NO_DEAL_CASE_MULTIPLIERS.length }, (_, index) => index)
+        .filter((index) => index !== chosenCaseIndex);
+    const opened = [];
+
+    for (let step = 0; step < DEAL_NO_DEAL_REVEAL_COUNT && available.length > 0; step += 1) {
+        const pickIndex = Math.floor(seededRoll(profile, nonceUsed, 60 + step) * available.length);
+        opened.push(available.splice(pickIndex, 1)[0]);
+    }
+
+    return opened.sort((left, right) => left - right);
+}
+
+function calculateDealNoDealOffer(board, chosenCaseIndex, openedIndices) {
+    const openedSet = new Set(openedIndices);
+    const remaining = board.filter((entry, index) => index === chosenCaseIndex || !openedSet.has(index));
+    const averageRemaining = remaining.reduce((total, entry) => total + Number(entry.value || 0), 0) / Math.max(1, remaining.length);
+    return toMoney(averageRemaining * DEAL_NO_DEAL_OFFER_FACTOR);
+}
+
+function getDealNoDealSession(username) {
+    if (!username) {
+        return null;
+    }
+
+    const session = dealNoDealSessions.get(username);
+    if (!session) {
+        return null;
+    }
+
+    if ((Date.now() - Number(session.startedAt || 0)) > DEAL_NO_DEAL_SESSION_TTL_MS) {
+        dealNoDealSessions.delete(username);
+        return null;
+    }
+
+    return session;
+}
+
+function clearDealNoDealSession(username) {
+    if (!username) {
+        return;
+    }
+
+    dealNoDealSessions.delete(username);
+}
+
+function serializeDealNoDealState(session, options = {}) {
+    if (!session) {
+        return { active: false };
+    }
+
+    const revealAll = !!options.revealAll;
+    const openedSet = new Set(session.openedIndices || []);
+
+    return {
+        active: true,
+        amount: session.amount,
+        bankerOffer: session.bankerOffer,
+        chosenCaseIndex: session.chosenCaseIndex,
+        startedAt: session.startedAt,
+        resolved: !!session.resolved,
+        resolution: session.resolution || null,
+        cases: session.board.map((entry, index) => {
+            const shouldReveal = revealAll || session.resolved || openedSet.has(index) || (session.resolution === 'no-deal' && index === session.chosenCaseIndex);
+            return {
+                index,
+                label: entry.caseNumber,
+                value: shouldReveal ? entry.value : null,
+                opened: revealAll || session.resolved ? true : openedSet.has(index),
+                isChosen: index === session.chosenCaseIndex
+            };
+        })
+    };
 }
 
 function getBinomialCoefficients(rows) {
@@ -922,7 +1023,7 @@ async function resolveJackpotRound() {
 
 function calculateCrashMultiplier(startedAt) {
     const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
-    const multiplier = Math.exp(elapsedSeconds * 0.34);
+    const multiplier = Math.exp(elapsedSeconds * CRASH_GROWTH_RATE);
     return toMoney(Math.min(80, Math.max(1, multiplier)));
 }
 
@@ -1337,6 +1438,104 @@ function resolveServerGame({ gameType, amount, body, profile, nonceUsed }) {
     return buildError(400, 'Unsupported game');
 }
 
+async function finalizeDealNoDealSession(username, resolution) {
+    const session = getDealNoDealSession(username);
+    if (!session) {
+        return buildError(404, 'No active Deal or No Deal board found');
+    }
+
+    const safeResolution = resolution === 'deal' ? 'deal' : 'no-deal';
+    const chosenCase = session.board[session.chosenCaseIndex];
+    const payout = safeResolution === 'deal'
+        ? toMoney(session.bankerOffer)
+        : toMoney(chosenCase?.value || 0);
+    const multiplier = session.amount > 0 ? toMoney(payout / session.amount) : 0;
+    const won = payout >= session.amount;
+    let connection;
+
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const claimedReceipt = await claimReceipt(connection, {
+            requestId: session.requestId,
+            username,
+            gameType: 'dealnodeal'
+        });
+        if (claimedReceipt) {
+            await connection.rollback();
+            clearDealNoDealSession(username);
+            return claimedReceipt;
+        }
+
+        const [playerRows] = await connection.query(
+            'SELECT balance, wallet_balance, xp, level FROM players WHERE username = ? FOR UPDATE',
+            [username]
+        );
+
+        if (playerRows.length === 0) {
+            await connection.rollback();
+            return buildError(404, 'Player not found');
+        }
+
+        const result = await settleReservedBalanceChange(connection, playerRows[0], {
+            username,
+            requestId: session.requestId,
+            gameType: 'dealnodeal',
+            amount: session.amount,
+            payout,
+            multiplier,
+            won,
+            meta: {
+                dealNoDeal: {
+                    resolution: safeResolution,
+                    bankerOffer: session.bankerOffer,
+                    chosenCaseNumber: chosenCase?.caseNumber || null,
+                    chosenCaseValue: chosenCase?.value || 0,
+                    openedCases: session.openedIndices.map((index) => ({
+                        caseNumber: session.board[index]?.caseNumber,
+                        value: session.board[index]?.value
+                    }))
+                }
+            }
+        });
+
+        if (result.status !== 200) {
+            await connection.rollback();
+            return result;
+        }
+
+        await connection.commit();
+
+        const resolvedState = serializeDealNoDealState({
+            ...session,
+            resolved: true,
+            resolution: safeResolution
+        }, { revealAll: true });
+
+        clearDealNoDealSession(username);
+        broadcastBet({ username, ...result.payload });
+
+        return {
+            status: 200,
+            payload: {
+                ...result.payload,
+                dealNoDeal: resolvedState
+            }
+        };
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Deal or No Deal finalize error:', error);
+        return buildError(500, 'Could not resolve Deal or No Deal');
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+}
+
 router.get('/crash/state', (req, res) => {
     const username = req.session?.loggedIn ? req.session.username : null;
     ensureCrashLoopStarted();
@@ -1469,6 +1668,134 @@ router.post('/crash/cashout', requireAuth, async (req, res) => {
     }
 });
 
+router.get('/deal-or-no-deal/state', requireAuth, (req, res) => {
+    const username = req.session.username;
+    const session = getDealNoDealSession(username);
+    return res.json({
+        success: true,
+        dealNoDeal: serializeDealNoDealState(session)
+    });
+});
+
+router.post('/deal-or-no-deal/start', requireAuth, async (req, res) => {
+    const username = req.session.username;
+    const amount = toMoney(req.body.amount);
+    const chosenCaseIndex = Number.parseInt(req.body.chosenCaseIndex, 10);
+
+    if (!claimServerActionCooldown(username, 'dealnodeal:start', 1200)) {
+        return res.status(429).json({ success: false, message: 'Slow down before opening another Deal or No Deal board' });
+    }
+
+    if (getDealNoDealSession(username)) {
+        return res.status(409).json({ success: false, message: 'Finish your active Deal or No Deal board first' });
+    }
+
+    if (!Number.isInteger(chosenCaseIndex) || chosenCaseIndex < 0 || chosenCaseIndex >= DEAL_NO_DEAL_CASE_MULTIPLIERS.length) {
+        return res.status(400).json({ success: false, message: 'Choose one of the 16 cases first' });
+    }
+
+    const amountValidation = validateGameBetAmount(amount);
+    if (amountValidation) {
+        return res.status(amountValidation.status).json({ success: false, message: amountValidation.message });
+    }
+
+    let connection;
+
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        const [playerRows] = await connection.query(
+            'SELECT balance, wallet_balance FROM players WHERE username = ? FOR UPDATE',
+            [username]
+        );
+
+        if (playerRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        const currentBalance = readWalletBalance(playerRows[0]);
+        if (currentBalance < amount) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: 'Insufficient balance' });
+        }
+
+        const profile = await getOrCreateFairProfile(connection, username, { forUpdate: true });
+        const nonceUsed = Number(profile.nonce || 0);
+        const board = buildDealNoDealBoard(amount, profile, nonceUsed);
+        const openedIndices = buildDealNoDealOpenedIndices(chosenCaseIndex, profile, nonceUsed);
+        const bankerOffer = calculateDealNoDealOffer(board, chosenCaseIndex, openedIndices);
+        const startedAt = Date.now();
+        const newBalance = toMoney(currentBalance - amount);
+        const requestId = sanitizeRequestId(`dealnodeal:${username}:${startedAt}`);
+
+        await connection.query('UPDATE players SET wallet_balance = ? WHERE username = ?', [newBalance, username]);
+        await connection.query('UPDATE provably_fair_profiles SET nonce = nonce + 1 WHERE username = ?', [username]);
+        profile.nonce = nonceUsed + 1;
+
+        const session = {
+            username,
+            amount,
+            chosenCaseIndex,
+            openedIndices,
+            bankerOffer,
+            board,
+            requestId,
+            startedAt
+        };
+        dealNoDealSessions.set(username, session);
+
+        await connection.commit();
+        return res.json({
+            success: true,
+            newBalance,
+            dealNoDeal: serializeDealNoDealState(session),
+            fairness: buildFairnessPayload(profile, nonceUsed, { stage: 'deal-or-no-deal' })
+        });
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error('Deal or No Deal start error:', error);
+        return res.status(500).json({ success: false, message: 'Could not start Deal or No Deal' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+});
+
+router.post('/deal-or-no-deal/deal', requireAuth, async (req, res) => {
+    const username = req.session.username;
+
+    if (!claimServerActionCooldown(username, 'dealnodeal:deal', 900)) {
+        return res.status(429).json({ success: false, message: 'Slow down before taking the banker offer' });
+    }
+
+    const result = await finalizeDealNoDealSession(username, 'deal');
+    if (result.status !== 200) {
+        return res.status(result.status).json(result.payload || { success: false, message: result.message });
+    }
+
+    return res.json(result.payload);
+});
+
+router.post('/deal-or-no-deal/no-deal', requireAuth, async (req, res) => {
+    const username = req.session.username;
+
+    if (!claimServerActionCooldown(username, 'dealnodeal:no-deal', 900)) {
+        return res.status(429).json({ success: false, message: 'Slow down before revealing the final case' });
+    }
+
+    const result = await finalizeDealNoDealSession(username, 'no-deal');
+    if (result.status !== 200) {
+        return res.status(result.status).json(result.payload || { success: false, message: result.message });
+    }
+
+    return res.json(result.payload);
+});
+
 router.get('/jackpot/state', (req, res) => {
     res.json({ success: true, jackpot: getJackpotStateSnapshot() });
 });
@@ -1579,7 +1906,7 @@ router.get('/fairness', requireAuth, async (req, res) => {
             const profile = await getOrCreateFairProfile(connection, username);
             return res.json({
                 success: true,
-                fairness: { ...buildFairnessPayload(profile, Number(profile.nonce), { scope: 'server' }), supportedGames: ['cases', ...SERVER_PLAY_GAME_TYPES] }
+                fairness: { ...buildFairnessPayload(profile, Number(profile.nonce), { scope: 'server' }), supportedGames: getFairnessSupportedGames() }
             });
         } finally {
             connection.release();
@@ -1610,7 +1937,7 @@ router.post('/fairness/client-seed', requireAuth, async (req, res) => {
 
         return res.json({
             success: true,
-            fairness: { ...buildFairnessPayload(profile, Number(profile.nonce), { scope: 'server' }), supportedGames: ['cases', ...SERVER_PLAY_GAME_TYPES] }
+                fairness: { ...buildFairnessPayload(profile, Number(profile.nonce), { scope: 'server' }), supportedGames: getFairnessSupportedGames() }
         });
     } catch (error) {
         if (connection) {
@@ -1654,7 +1981,7 @@ router.post('/fairness/rotate', requireAuth, async (req, res) => {
                 ...buildFairnessPayload(rotatedProfile, Number(rotatedProfile.nonce), { scope: 'server' }),
                 previousServerSeed: profile.server_seed,
                 previousServerSeedHash: profile.server_seed_hash,
-                supportedGames: ['cases', ...SERVER_PLAY_GAME_TYPES]
+                supportedGames: getFairnessSupportedGames()
             }
         });
     } catch (error) {

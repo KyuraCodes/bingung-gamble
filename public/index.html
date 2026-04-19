@@ -136,6 +136,11 @@
                         <div class="nav-section">
                             <span class="nav-label">Prize Pool</span>
                             <a href="#" class="nav-item" data-game="jackpot"><i class="fas fa-vault"></i><span>Jackpot</span></a>
+                            <a href="#" class="nav-item nav-item-new" data-game="dealnodeal">
+                                <i class="fas fa-briefcase"></i>
+                                <span>Deal or No Deal</span>
+                                <em class="nav-item-tag">NEW</em>
+                            </a>
                             <a href="#" class="nav-item" data-game="cases"><i class="fas fa-box-open"></i><span>Cases</span></a>
                             <a href="#" class="nav-item" data-game="dailyrewards"><i class="fas fa-calendar-check"></i><span>Daily Rewards</span></a>
                         </div>
@@ -207,6 +212,23 @@
                                 </div>
                                 <span class="live-status" id="liveFeedStatus">synced</span>
                             </div>
+                            <div class="floor-pulse-card">
+                                <div>
+                                    <span class="summary-label">Floor Pulse</span>
+                                    <strong id="summaryGlobalBets">0 bets</strong>
+                                    <p id="betFeedInsight">Fresh slips, live chat, and bot sims all pulse from here.</p>
+                                </div>
+                                <div class="pulse-metrics">
+                                    <div class="pulse-metric">
+                                        <span>Win Rate</span>
+                                        <strong id="summaryWinRate">0%</strong>
+                                    </div>
+                                    <div class="pulse-metric">
+                                        <span>Net Flow</span>
+                                        <strong id="summaryNetProfit">$0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="realtime-summary">
                                 <div class="summary-tile">
                                     <span class="summary-label">Players</span>
@@ -228,16 +250,31 @@
 
                             <div class="feed-block">
                                 <div class="feed-block-header">
-                                    <strong>Fresh Tickets</strong>
-                                    <button id="recentBetsToggle" class="feed-action-btn" type="button">More</button>
+                                    <div>
+                                        <strong>Fresh Tickets</strong>
+                                        <span id="betFeedInfo">Latest global slips</span>
+                                    </div>
+                                    <div class="feed-header-tools">
+                                        <div class="feed-filter-group" id="betFeedFilters">
+                                            <button class="feed-filter-btn active" type="button" data-bet-filter="all">All</button>
+                                            <button class="feed-filter-btn" type="button" data-bet-filter="wins">Wins</button>
+                                            <button class="feed-filter-btn" type="button" data-bet-filter="losses">Losses</button>
+                                        </div>
+                                        <button id="recentBetsToggle" class="feed-action-btn" type="button">More</button>
+                                    </div>
                                 </div>
                                 <div id="liveBets" class="live-bets"></div>
                             </div>
 
                             <section class="chat-panel">
                                 <div class="feed-block-header">
-                                    <strong>Lobby Chat</strong>
-                                    <span id="chatPresenceSummary">0 online now</span>
+                                    <div>
+                                        <strong>Lobby Chat</strong>
+                                        <span id="chatPresenceSummary">0 online now</span>
+                                    </div>
+                                    <div class="feed-header-tools">
+                                        <span class="chat-inline-note">Tips and quick replies live here</span>
+                                    </div>
                                 </div>
                                 <div id="liveChatMessages" class="live-chat-messages"></div>
                                 <form id="liveChatForm" class="live-chat-form">
@@ -247,6 +284,12 @@
                                         <i class="fas fa-paper-plane"></i>
                                     </button>
                                 </form>
+                                <div class="chat-quick-replies" id="chatQuickReplies">
+                                    <button type="button" class="chat-chip" data-chat-reply="gl all">GL ALL</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="nice hit">NICE HIT</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="bot sold me">BOT SOLD ME</button>
+                                    <button type="button" class="chat-chip" data-chat-reply="banker lowball">BANKER LOWBALL</button>
+                                </div>
                             </section>
                         </aside>
                     </div>

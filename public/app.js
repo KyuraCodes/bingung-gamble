@@ -10,6 +10,8 @@ let globalRealtimeStats = null;
 let provablyFairState = null;
 let provablyFairExpanded = false;
 let recentBetsExpanded = false;
+let recentBetsFilter = 'all';
+let cachedRecentBets = [];
 let pendingTipRecipient = '';
 
 const responsiveGridRegistry = new Set();
@@ -35,11 +37,20 @@ const GAME_META = {
     },
     sports: {
         title: 'Sports',
-        eyebrow: 'Bet Slip',
-        chip: 'Live Board',
-        stage: 'Sportsbook Lounge',
-        description: 'Pick your side, lock the ticket, and sweat live-style markets across basketball, football, tennis, and esports.',
+        eyebrow: 'Bot Board',
+        chip: 'Sim Slip',
+        stage: 'Sports Sim Lounge',
+        description: 'Pick a side in bot-run basketball, soccer, tennis, and esports sims with server-resolved results.',
         icon: 'fa-trophy'
+    },
+    dealnodeal: {
+        title: 'Deal or No Deal',
+        eyebrow: 'Banker Room',
+        chip: '16 Cases',
+        stage: 'Case Offer Stage',
+        description: 'Lock one personal case, sweat a live banker offer, and choose whether to take the money or ride your hidden value.',
+        icon: 'fa-briefcase',
+        badge: 'NEW'
     },
     mines: {
         title: 'Mines',
@@ -200,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChatTips();
     setupWalletTransfers();
     setupRecentBetsToggle();
+    setupBetFeedFilters();
+    setupChatQuickReplies();
     renderModeStrip();
     renderQuickSwitch();
     setupProvablyFairPanel();
@@ -790,6 +803,11 @@ function updateOnlinePresenceDisplay(presence = {}) {
         }
     });
 
+    const profileSpotlightOnline = document.getElementById('profileSpotlightOnline');
+    if (profileSpotlightOnline) {
+        profileSpotlightOnline.textContent = onlineLabel;
+    }
+
     const loginOnlinePlayers = document.getElementById('loginOnlinePlayers');
     if (loginOnlinePlayers) {
         loginOnlinePlayers.textContent = `${onlineCount} Online`;
@@ -819,6 +837,22 @@ function updateGlobalStatsDisplay(stats = {}) {
     const betsCount = document.getElementById('summaryGlobalBets');
     if (betsCount) {
         betsCount.textContent = `${globalRealtimeStats.totalBets} bets`;
+    }
+
+    const totalDecisions = globalRealtimeStats.totalWins + globalRealtimeStats.totalLosses;
+    const winRate = totalDecisions > 0
+        ? `${Math.round((globalRealtimeStats.totalWins / totalDecisions) * 100)}%`
+        : '0%';
+
+    const winRateElement = document.getElementById('summaryWinRate');
+    if (winRateElement) {
+        winRateElement.textContent = winRate;
+    }
+
+    const netProfitElement = document.getElementById('summaryNetProfit');
+    if (netProfitElement) {
+        const netValue = Number(globalRealtimeStats.netProfit || 0);
+        netProfitElement.textContent = `${netValue >= 0 ? '+' : '-'}$${formatAmount(Math.abs(netValue))}`;
     }
 
     const wins = document.getElementById('summaryGlobalWins');
@@ -1046,9 +1080,25 @@ function buildChatMessageElement(entry, animate = true) {
     const top = document.createElement('div');
     top.className = 'chat-message-top';
 
+    const heading = document.createElement('div');
+    heading.className = 'chat-message-heading';
+
     const user = document.createElement('strong');
     user.className = 'chat-message-user';
     user.textContent = entry.username;
+    heading.appendChild(user);
+
+    if (entry.username === currentPlayer?.username) {
+        const youBadge = document.createElement('span');
+        youBadge.className = 'chat-message-badge';
+        youBadge.textContent = 'You';
+        heading.appendChild(youBadge);
+    } else if (entry.source === 'tip') {
+        const tipBadge = document.createElement('span');
+        tipBadge.className = 'chat-message-badge is-tip';
+        tipBadge.textContent = 'Tip';
+        heading.appendChild(tipBadge);
+    }
 
     const time = document.createElement('span');
     time.className = 'chat-message-time';
@@ -1058,6 +1108,13 @@ function buildChatMessageElement(entry, animate = true) {
     actions.className = 'chat-message-actions';
 
     if (entry.username && currentPlayer?.username && entry.username !== currentPlayer.username && entry.source !== 'tip') {
+        const replyButton = document.createElement('button');
+        replyButton.className = 'chat-tip-btn is-ghost';
+        replyButton.type = 'button';
+        replyButton.dataset.replyUsername = entry.username;
+        replyButton.textContent = 'Reply';
+        actions.appendChild(replyButton);
+
         const tipButton = document.createElement('button');
         tipButton.className = 'chat-tip-btn';
         tipButton.type = 'button';
@@ -1070,7 +1127,7 @@ function buildChatMessageElement(entry, animate = true) {
     text.className = `chat-message-text${entry.source === 'tip' ? ' is-tip' : ''}`;
     text.textContent = entry.message;
 
-    top.append(user, time, actions);
+    top.append(heading, time, actions);
     body.append(top, text);
     item.append(avatar, body);
 
@@ -1115,6 +1172,20 @@ function addChatMessage(entry, animate = true) {
     }
 }
 
+function primeChatInput(text, replace = false) {
+    const input = document.getElementById('liveChatInput');
+    if (!input || input.disabled) {
+        return;
+    }
+
+    const nextValue = replace || !input.value.trim()
+        ? text
+        : `${input.value.trim()} ${text}`.slice(0, 220);
+    input.value = nextValue;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+}
+
 function setupLiveChat() {
     const form = document.getElementById('liveChatForm');
     const input = document.getElementById('liveChatInput');
@@ -1143,6 +1214,29 @@ function setupLiveChat() {
 
         socket.emit('chat:send', { message });
         input.value = '';
+    });
+
+    document.getElementById('liveChatMessages')?.addEventListener('click', (event) => {
+        const replyButton = event.target.closest('[data-reply-username]');
+        if (replyButton) {
+            primeChatInput(`@${replyButton.dataset.replyUsername} `, true);
+        }
+    });
+}
+
+function setupChatQuickReplies() {
+    const container = document.getElementById('chatQuickReplies');
+    if (!container) {
+        return;
+    }
+
+    container.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-chat-reply]');
+        if (!button) {
+            return;
+        }
+
+        primeChatInput(button.dataset.chatReply || '', true);
     });
 }
 
@@ -1359,6 +1453,26 @@ function setupRecentBetsToggle() {
     toggle.addEventListener('click', () => {
         recentBetsExpanded = !recentBetsExpanded;
         loadRecentBets();
+    });
+}
+
+function setupBetFeedFilters() {
+    const filterGroup = document.getElementById('betFeedFilters');
+    if (!filterGroup) {
+        return;
+    }
+
+    filterGroup.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-bet-filter]');
+        if (!button) {
+            return;
+        }
+
+        recentBetsFilter = button.dataset.betFilter || 'all';
+        filterGroup.querySelectorAll('[data-bet-filter]').forEach((item) => {
+            item.classList.toggle('active', item === button);
+        });
+        renderRecentBetsList();
     });
 }
 
@@ -1755,6 +1869,11 @@ function updatePlayerInfo() {
         walletTransferBalance.textContent = '$' + formatAmount(currentPlayer.balance);
     }
 
+    const profileSpotlightWallet = document.getElementById('profileSpotlightWallet');
+    if (profileSpotlightWallet) {
+        profileSpotlightWallet.textContent = '$' + formatAmount(currentPlayer.balance);
+    }
+
     const vaultTransferBalance = document.getElementById('vaultTransferBalance');
     if (vaultTransferBalance) {
         vaultTransferBalance.textContent = '$' + formatAmount(currentPlayer.vaultBalance);
@@ -1807,6 +1926,7 @@ function renderModeStrip() {
                 <span class="mode-pill">
                     <i class="fas ${meta.icon}"></i>
                     <span>${meta.title}</span>
+                    ${meta.badge ? `<em class="mode-pill-badge">${meta.badge}</em>` : ''}
                 </span>
             `;
         }).join('');
@@ -1819,6 +1939,7 @@ function renderModeStrip() {
                 <button class="showcase-card ${game === currentGame ? 'active' : ''}" data-showcase-game="${game}" type="button">
                     <i class="fas ${meta.icon}"></i>
                     <span>${meta.title}</span>
+                    ${meta.badge ? `<em class="mode-pill-badge">${meta.badge}</em>` : ''}
                 </button>
             `;
         }).join('');
@@ -1843,6 +1964,7 @@ function renderQuickSwitch() {
         return `
             <button class="switch-chip ${game === currentGame ? 'active' : ''}" data-quick-game="${game}" type="button">
                 ${meta.title}
+                ${meta.badge ? `<em class="mode-pill-badge">${meta.badge}</em>` : ''}
             </button>
         `;
     }).join('');
@@ -1880,10 +2002,26 @@ function loadProfileGame(container) {
                 <div class="dashboard-banner profile-dashboard-banner">
                     <div>
                         <span class="banner-tag">Profile Overview</span>
-                        <h3>All your wallet, level, and mode info lives here.</h3>
-                        <p>Deposit while offline, withdraw while offline, and let the server apply the Minecraft Vault balance when you join again.</p>
+                        <h3>All your bankroll, level pace, and floor momentum live here.</h3>
+                        <p>Deposit while offline, withdraw while offline, and track how your website balance, table profit, and live floor traffic are moving together.</p>
                     </div>
-                    <div class="mode-showcase" id="modeShowcase"></div>
+                    <div class="dashboard-banner-side">
+                        <div class="dashboard-spotlight">
+                            <div class="dashboard-spotlight-card">
+                                <span>Website Wallet</span>
+                                <strong id="profileSpotlightWallet">$${formatAmount(currentPlayer.balance)}</strong>
+                            </div>
+                            <div class="dashboard-spotlight-card">
+                                <span>Total Profit</span>
+                                <strong id="profileSpotlightProfit">$${formatAmount(currentPlayer.totalProfit || 0)}</strong>
+                            </div>
+                            <div class="dashboard-spotlight-card">
+                                <span>Players Online</span>
+                                <strong id="profileSpotlightOnline">${globalRealtimeStats?.onlinePlayers || 0}</strong>
+                            </div>
+                        </div>
+                        <div class="mode-showcase" id="modeShowcase"></div>
+                    </div>
                 </div>
 
                 <div class="overview-grid">
@@ -2205,24 +2343,100 @@ async function loadRecentBets() {
         const data = await response.json();
 
         if (data.success && data.bets.length > 0) {
-            data.bets.forEach((bet) => addLiveBet(bet, false));
+            cachedRecentBets = data.bets.slice();
+            renderRecentBetsList();
         } else {
+            cachedRecentBets = [];
             container.innerHTML = '<div class="feed-empty-state">No slips punched yet. The first ticket sets the tone.</div>';
+            updateBetFeedInsight();
         }
     } catch (error) {
         console.error('Failed to load recent bets:', error);
+        cachedRecentBets = [];
         container.innerHTML = '<div class="feed-empty-state">The feed is syncing back in.</div>';
+        updateBetFeedInsight();
     }
 }
 
-function addLiveBet(bet, animate = true) {
+function matchesRecentBetFilter(bet) {
+    if (recentBetsFilter === 'wins') {
+        return !!bet.won;
+    }
+
+    if (recentBetsFilter === 'losses') {
+        return !bet.won;
+    }
+
+    return true;
+}
+
+function updateBetFeedInsight(bets = cachedRecentBets) {
+    const insight = document.getElementById('betFeedInsight');
+    const info = document.getElementById('betFeedInfo');
+    if (!insight && !info) {
+        return;
+    }
+
+    const recentSet = Array.isArray(bets) ? bets : [];
+    if (recentSet.length === 0) {
+        if (insight) {
+            insight.textContent = 'Fresh slips, live chat, and bot sims all pulse from here.';
+        }
+        if (info) {
+            info.textContent = 'Latest global slips';
+        }
+        return;
+    }
+
+    const biggestSlip = recentSet.reduce((best, entry) => (
+        Number(entry.amount || 0) > Number(best.amount || 0) ? entry : best
+    ), recentSet[0]);
+    const hottestGame = recentSet.reduce((accumulator, entry) => {
+        const gameType = String(entry.gameType || 'crash');
+        accumulator[gameType] = (accumulator[gameType] || 0) + 1;
+        return accumulator;
+    }, {});
+    const hottestGameType = Object.entries(hottestGame)
+        .sort((left, right) => right[1] - left[1])[0]?.[0] || 'crash';
+    const hottestMeta = getGameMeta(hottestGameType);
+    const filterCopy = recentBetsFilter === 'wins'
+        ? 'wins only'
+        : recentBetsFilter === 'losses'
+            ? 'losses only'
+            : 'all outcomes';
+
+    if (insight) {
+        insight.textContent = `${biggestSlip.username} dropped the biggest recent slip at $${formatAmount(biggestSlip.amount)} while ${hottestMeta.title} is leading the board.`;
+    }
+
+    if (info) {
+        info.textContent = `${recentBetsExpanded ? '1h window' : 'latest window'} • ${filterCopy}`;
+    }
+}
+
+function renderRecentBetsList(options = {}) {
     const container = document.getElementById('liveBets');
     if (!container) return;
 
-    if (container.querySelector('.feed-empty-state')) {
-        container.innerHTML = '';
+    const filteredBets = cachedRecentBets.filter(matchesRecentBetFilter);
+    const maxVisibleBets = recentBetsExpanded ? 100 : 5;
+    const visibleBets = filteredBets.slice(0, maxVisibleBets);
+    container.innerHTML = '';
+
+    if (visibleBets.length === 0) {
+        container.innerHTML = '<div class="feed-empty-state">No slips match this filter yet.</div>';
+        updateBetFeedInsight(filteredBets.length > 0 ? filteredBets : cachedRecentBets);
+        return;
     }
 
+    visibleBets.forEach((bet, index) => {
+        container.appendChild(buildLiveBetElement(bet, !!options.animateNewest && index === 0));
+    });
+
+    updateBetFeedInsight(filteredBets);
+}
+
+function buildLiveBetElement(bet, animate = true) {
     const meta = getGameMeta(bet.gameType || 'crash');
     const betItem = document.createElement('div');
     betItem.className = `live-bet ${bet.won ? 'win' : 'loss'}`;
@@ -2268,9 +2482,12 @@ function addLiveBet(bet, animate = true) {
     content.className = 'live-bet-content';
     content.innerHTML = `
         <div class="live-bet-top">
-            <div>
+            <div class="live-bet-title-stack">
                 <span class="live-bet-user" title="${hoverLabel}">${bet.username}</span>
-                <span class="live-bet-type">${meta.title}</span>
+                <div class="live-bet-badges">
+                    <span class="live-bet-type"><i class="fas ${meta.icon}"></i>${meta.title}</span>
+                    <span class="live-bet-state ${bet.won ? 'win' : 'loss'}">${bet.won ? 'Won' : 'Lost'}</span>
+                </div>
             </div>
             <span class="live-bet-time">${formatTimeLabel(bet.timestamp)}</span>
         </div>
@@ -2284,15 +2501,14 @@ function addLiveBet(bet, animate = true) {
     `;
 
     betItem.append(playerWrap, content);
+    return betItem;
+}
 
-    container.insertBefore(betItem, container.firstChild);
+function addLiveBet(bet, animate = true) {
+    cachedRecentBets = [bet, ...cachedRecentBets].slice(0, 100);
+    renderRecentBetsList({ animateNewest: animate });
 
-    const maxVisibleBets = recentBetsExpanded ? 100 : 5;
-    while (container.children.length > maxVisibleBets) {
-        container.removeChild(container.lastChild);
-    }
-
-    if (animate && bet.username !== currentPlayer?.username) {
+    if (animate && bet.username !== currentPlayer?.username && matchesRecentBetFilter(bet)) {
         playUiSound('live-bet');
     }
 }

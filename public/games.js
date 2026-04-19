@@ -105,7 +105,7 @@ let jackpotState = null;
 let jackpotPoller = null;
 const CRASH_EDGE = 0.8;
 const DICE_EDGE = 0.78;
-const COINFLIP_PAYOUT = 1.78;
+const COINFLIP_PAYOUT = 2;
 const LIMBO_EDGE = 0.68;
 const GAME_COOLDOWN_MS = 900;
 const LONG_GAME_COOLDOWN_MS = 1400;
@@ -127,31 +127,31 @@ const GAME_ACTION_BUSY = new Set();
 const GAME_ACTION_COOLDOWNS = new Map();
 const SPORTSBOOK_SLATE = [
     {
-        id: 'night-run',
+        id: 'bot-hoops',
         sport: 'Basketball',
-        league: 'Night Run League',
-        home: 'Metro Owls',
-        away: 'Neon Vipers',
-        start: 'Live 4Q 06:14',
-        note: 'Fast pace, fast close, loud total.',
+        league: 'Bot Arena',
+        home: 'You',
+        away: 'Pulse Bot',
+        start: 'Sim Ready',
+        note: 'No stick skill needed. Pick your side and let the bot sim run.',
         markets: [
-            { id: 'home', label: 'Metro Owls', odds: 1.84 },
-            { id: 'away', label: 'Neon Vipers', odds: 2.02 },
-            { id: 'over', label: 'Over 214.5', odds: 1.96 }
+            { id: 'home', label: 'You', odds: 1.94 },
+            { id: 'away', label: 'Pulse Bot', odds: 1.94 },
+            { id: 'over', label: 'Over 201.5', odds: 1.9 }
         ]
     },
     {
-        id: 'harbor-clash',
-        sport: 'Football',
-        league: 'Harbor Premier',
-        home: 'Harbor FC',
-        away: 'Goldcrest United',
-        start: 'Today 21:30',
-        note: 'Tighter price, late-goal energy.',
+        id: 'goal-bot',
+        sport: 'Soccer',
+        league: 'Bot Cup',
+        home: 'You',
+        away: 'Keeper Bot',
+        start: 'Sim Ready',
+        note: 'A clean soccer bot sweat with no aiming or dribbling minigame.',
         markets: [
-            { id: 'home', label: 'Harbor FC', odds: 2.1 },
-            { id: 'away', label: 'Goldcrest United', odds: 2.62 },
-            { id: 'over', label: 'Over 2.5', odds: 2.04 }
+            { id: 'home', label: 'You', odds: 2.02 },
+            { id: 'away', label: 'Keeper Bot', odds: 1.86 },
+            { id: 'over', label: 'Over 2.5', odds: 2.08 }
         ]
     },
     {
@@ -187,6 +187,290 @@ let sportsbookSelection = {
     fixtureId: SPORTSBOOK_SLATE[0].id,
     marketId: SPORTSBOOK_SLATE[0].markets[0].id
 };
+const DEAL_NO_DEAL_MULTIPLIERS = [0.05, 0.09, 0.14, 0.2, 0.28, 0.38, 0.5, 0.62, 0.75, 0.85, 0.94, 1, 2.5, 8, 20, 50];
+let dealNoDealState = null;
+
+function loadDealnodealGame(container) {
+    container.innerHTML = `
+        <div class="game-container deal-nodeal-game">
+            <div class="responsive-grid deal-nodeal-layout" data-desktop-columns="minmax(0, 1.4fr) minmax(320px, 0.9fr)">
+                <section class="deal-stage">
+                    <div class="deal-hero">
+                        <span class="banner-tag">New Mode • 16 Cases</span>
+                        <h3>Take the banker offer or ride the final case.</h3>
+                        <p>Every board scales from your stake. The top case is always 50x, and your exact bet value sits as the fifth-highest case on the board.</p>
+                    </div>
+                    <div id="dealNoDealBoard" class="deal-board"></div>
+                </section>
+
+                <aside class="deal-sidebar">
+                    <label class="bet-input-group">
+                        <span class="bet-label">Bet Amount</span>
+                        <input id="dealNoDealBetAmount" class="bet-input" type="text" placeholder="10m, 1b, 10b" data-amount-input="true" autocomplete="off">
+                    </label>
+
+                    <div class="quick-bets sportsbook-quick-bets">
+                        <button class="quick-bet-btn" type="button" data-deal-amount="10000000">10M</button>
+                        <button class="quick-bet-btn" type="button" data-deal-amount="1000000000">1B</button>
+                        <button class="quick-bet-btn" type="button" data-deal-amount="10000000000">10B</button>
+                        <button class="quick-bet-btn" type="button" data-deal-amount="max">MAX</button>
+                    </div>
+
+                    <div class="deal-math-card" id="dealNoDealMathPreview"></div>
+                    <div class="deal-offer-card" id="dealNoDealOffer"></div>
+                    <div class="deal-actions" id="dealNoDealActions"></div>
+                    <div class="deal-result-card" id="dealNoDealResult"></div>
+                </aside>
+            </div>
+        </div>
+    `;
+
+    const betInput = document.getElementById('dealNoDealBetAmount');
+    if (betInput) {
+        betInput.addEventListener('input', renderDealNoDealMathPreview);
+        betInput.addEventListener('blur', renderDealNoDealMathPreview);
+    }
+
+    container.querySelectorAll('[data-deal-amount]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const rawValue = button.dataset.dealAmount;
+            const nextAmount = rawValue === 'max'
+                ? Math.floor(Number(currentPlayer?.balance || 0))
+                : Number(rawValue);
+            if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+                return;
+            }
+
+            window.setAmountInputValue('dealNoDealBetAmount', nextAmount);
+            renderDealNoDealMathPreview();
+        });
+    });
+
+    renderDealNoDealMathPreview();
+    renderDealNoDealState();
+    refreshDealNoDealState();
+}
+
+function getDealNoDealPreviewAmount() {
+    const amount = readAmountInput('dealNoDealBetAmount');
+    if (Number.isFinite(amount) && amount > 0) {
+        return amount;
+    }
+
+    return 1e10;
+}
+
+function renderDealNoDealMathPreview() {
+    const preview = document.getElementById('dealNoDealMathPreview');
+    if (!preview) {
+        return;
+    }
+
+    const amount = getDealNoDealPreviewAmount();
+    const topCases = DEAL_NO_DEAL_MULTIPLIERS.slice(-5).reverse();
+
+    preview.innerHTML = `
+        <span class="sportsbook-slip-kicker">Math Preview</span>
+        <strong>$${formatAmount(amount)} stake map</strong>
+        <div class="deal-math-grid">
+            ${topCases.map((multiplier, index) => `
+                <div class="deal-math-row ${index === 4 ? 'is-anchor' : ''}">
+                    <span>${multiplier.toFixed(multiplier >= 10 ? 0 : multiplier >= 1 ? 1 : 2)}x</span>
+                    <strong>$${formatAmount(amount * multiplier)}</strong>
+                </div>
+            `).join('')}
+        </div>
+        <p>Your own stake value lands as the fifth-highest case every board. Top case always peaks at $${formatAmount(amount * 50)}.</p>
+    `;
+}
+
+function renderDealNoDealState() {
+    const board = document.getElementById('dealNoDealBoard');
+    const offer = document.getElementById('dealNoDealOffer');
+    const actions = document.getElementById('dealNoDealActions');
+    const result = document.getElementById('dealNoDealResult');
+    if (!board || !offer || !actions || !result) {
+        return;
+    }
+
+    const cases = dealNoDealState?.cases || Array.from({ length: 16 }, (_, index) => ({
+        index,
+        label: index + 1,
+        value: null,
+        opened: false,
+        isChosen: false
+    }));
+
+    board.innerHTML = cases.map((entry) => {
+        const buttonClass = [
+            'deal-case',
+            entry.opened ? 'is-opened' : '',
+            entry.isChosen ? 'is-chosen' : '',
+            dealNoDealState?.resolved ? 'is-resolved' : ''
+        ].filter(Boolean).join(' ');
+        const disabled = !!dealNoDealState?.active || !!dealNoDealState?.resolved;
+
+        return `
+            <button class="${buttonClass}" type="button" ${disabled ? 'disabled' : ''} onclick="startDealNoDeal(${entry.index})">
+                <span class="deal-case-label">Case ${entry.label}</span>
+                <strong>${entry.value === null ? 'Tap To Lock' : `$${formatAmount(entry.value)}`}</strong>
+                <span>${entry.isChosen ? 'Your case' : entry.opened ? 'Opened' : 'Sealed'}</span>
+            </button>
+        `;
+    }).join('');
+
+    if (!dealNoDealState?.active && !dealNoDealState?.resolved) {
+        offer.innerHTML = `
+            <span class="sportsbook-slip-kicker">Banker Offer</span>
+            <strong>Pick one of the 16 cases to start.</strong>
+            <p>Six cases get cracked immediately, then the banker throws one offer at you.</p>
+        `;
+        actions.innerHTML = '<div class="deal-note">Choose a case from the board to spin up the banker room.</div>';
+        result.innerHTML = '';
+        return;
+    }
+
+    if (dealNoDealState?.resolved) {
+        const chosenCase = dealNoDealState.cases.find((entry) => entry.isChosen);
+        const tookDeal = dealNoDealState.resolution === 'deal';
+        offer.innerHTML = `
+            <span class="sportsbook-slip-kicker">Final Resolution</span>
+            <strong>${tookDeal ? 'Deal taken' : 'No deal played out'}</strong>
+            <p>${tookDeal
+                ? `Banker paid $${formatAmount(dealNoDealState.bankerOffer || 0)} before the final reveal.`
+                : `Your locked case was worth $${formatAmount(chosenCase?.value || 0)}.`}</p>
+        `;
+        actions.innerHTML = '<button class="btn-primary" type="button" onclick="resetDealNoDealBoard()">Play Another Board</button>';
+        result.innerHTML = `
+            <span class="sportsbook-slip-kicker">Result</span>
+            <strong>${tookDeal ? 'Offer accepted' : `Case ${chosenCase?.label || '--'} revealed`}</strong>
+            <p>${tookDeal
+                ? `You stopped at $${formatAmount(dealNoDealState.bankerOffer || 0)}.`
+                : `You rode the final case for $${formatAmount(chosenCase?.value || 0)}.`}</p>
+        `;
+        return;
+    }
+
+    if (dealNoDealState?.active) {
+        offer.innerHTML = `
+            <span class="sportsbook-slip-kicker">Banker Offer</span>
+            <strong>$${formatAmount(dealNoDealState.bankerOffer || 0)}</strong>
+            <p>The banker is pricing the average of the remaining board after the first six reveals.</p>
+        `;
+        actions.innerHTML = `
+            <button class="btn-primary" type="button" onclick="resolveDealNoDeal('deal')">Deal</button>
+            <button class="btn-secondary" type="button" onclick="resolveDealNoDeal('no-deal')">No Deal</button>
+        `;
+        result.innerHTML = `
+            <span class="sportsbook-slip-kicker">Board Status</span>
+            <strong>Your case is locked.</strong>
+            <p>Opened cases show their value. The chosen case stays sealed until you take the offer or reveal it.</p>
+        `;
+        return;
+    }
+}
+
+async function refreshDealNoDealState() {
+    if (isBetaMode || !currentPlayer) {
+        dealNoDealState = null;
+        renderDealNoDealState();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/game/deal-or-no-deal/state');
+        const data = await response.json();
+        if (data.success && data.dealNoDeal?.active) {
+            dealNoDealState = data.dealNoDeal;
+        } else if (!dealNoDealState?.resolved) {
+            dealNoDealState = null;
+        }
+    } catch (error) {
+        console.error('Deal or No Deal state failed:', error);
+    }
+
+    renderDealNoDealState();
+}
+
+async function startDealNoDeal(caseIndex) {
+    if (dealNoDealState?.active) {
+        showNotification('Finish the active board first.', 'info');
+        return;
+    }
+
+    const amount = readAmountInput('dealNoDealBetAmount');
+    if (!window.validateGameBetAmount || !window.validateGameBetAmount(amount, 'Deal or No Deal bet')) {
+        return;
+    }
+
+    if (amount > Number(currentPlayer?.balance || 0)) {
+        showNotification('Insufficient balance', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/game/deal-or-no-deal/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount,
+                chosenCaseIndex: caseIndex
+            })
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Could not start Deal or No Deal');
+        }
+
+        hydratePlayerStateFromResult(data);
+        dealNoDealState = data.dealNoDeal || null;
+        renderDealNoDealState();
+        showNotification(`Banker opens at $${formatAmount(data.dealNoDeal?.bankerOffer || 0)}.`, 'success');
+    } catch (error) {
+        console.error('Deal or No Deal start failed:', error);
+        showNotification(error.message || 'Could not start Deal or No Deal', 'error');
+    }
+}
+
+async function resolveDealNoDeal(choice) {
+    if (!dealNoDealState?.active) {
+        showNotification('No active board to resolve.', 'error');
+        return;
+    }
+
+    const route = choice === 'deal' ? 'deal' : 'no-deal';
+
+    try {
+        const response = await fetch(`/api/game/deal-or-no-deal/${route}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Could not resolve Deal or No Deal');
+        }
+
+        hydratePlayerStateFromResult(data);
+        dealNoDealState = data.dealNoDeal || null;
+        renderDealNoDealState();
+        showNotification(
+            route === 'deal'
+                ? `Banker paid $${formatAmount(data.payout || 0)}.`
+                : `Final case revealed for $${formatAmount(data.payout || 0)}.`,
+            data.won ? 'success' : 'info'
+        );
+    } catch (error) {
+        console.error('Deal or No Deal resolve failed:', error);
+        showNotification(error.message || 'Could not resolve Deal or No Deal', 'error');
+    }
+}
+
+function resetDealNoDealBoard() {
+    dealNoDealState = null;
+    renderDealNoDealState();
+}
 
 function clampMultiplier(value, maxMultiplier) {
     const parsed = Number(value);
@@ -2634,16 +2918,40 @@ function loadBlackjackGame(container) {
     container.innerHTML = `
         <div class="game-container">
             <div class="responsive-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div>
+                <div class="blackjack-table-shell">
+                    <div class="blackjack-table-header">
+                        <div>
+                            <span class="banner-tag">Card Room</span>
+                            <h3 class="game-title">Blackjack Table</h3>
+                            <p class="fallback-copy">Sharp cards, stronger felt, clearer action state, and a cleaner result rail.</p>
+                        </div>
+                        <div class="blackjack-table-meta">
+                            <div class="blackjack-meta-pill">
+                                <span>Payout</span>
+                                <strong>2.20x natural</strong>
+                            </div>
+                            <div class="blackjack-meta-pill">
+                                <span>Dealer</span>
+                                <strong>Stand on 17</strong>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="blackjack-table">
-                        <div class="blackjack-seat">
-                            <div class="bet-label">Dealer</div>
+                        <div class="blackjack-seat is-dealer">
+                            <div class="blackjack-seat-top">
+                                <div class="bet-label">Dealer</div>
+                                <div class="blackjack-seat-badge">House</div>
+                            </div>
                             <div id="dealerCards" class="blackjack-hand"></div>
                             <div id="dealerScore" class="blackjack-score is-dealer">0</div>
                         </div>
 
-                        <div class="blackjack-seat">
-                            <div class="bet-label">Your Hand</div>
+                        <div class="blackjack-seat is-player">
+                            <div class="blackjack-seat-top">
+                                <div class="bet-label">Your Hand</div>
+                                <div class="blackjack-seat-badge">Player</div>
+                            </div>
                             <div id="playerCards" class="blackjack-hand"></div>
                             <div id="playerScore" class="blackjack-score is-player">0</div>
                         </div>
@@ -2671,7 +2979,7 @@ function loadBlackjackGame(container) {
                     <div class="stat-list">
                         <div class="stat-row">
                             <span class="stat-row-label">Blackjack</span>
-                            <span class="stat-row-value">6:5 payout</span>
+                            <span class="stat-row-value">2.20x natural</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-row-label">Dealer Rule</span>
@@ -3149,10 +3457,11 @@ function spinSlots() {
 function loadCoinflipGame(container) {
     container.innerHTML = `
         <div class="game-container">
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div>
-                    <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; padding: 60px; text-align: center;">
-                        <div id="coinDisplay" style="font-size: 150px; margin-bottom: 20px; transition: transform 0.6s;">🪙</div>
+            <div class="responsive-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="coinflip-stage-card">
+                    <div class="coinflip-stage">
+                        <div id="coinDisplay" class="coinflip-coin-display">🪙</div>
+                        <div id="coinSidePill" class="coinflip-side-pill">Waiting for your call</div>
                         <div id="coinResult" style="font-size: 28px; font-weight: 900;"></div>
                     </div>
                 </div>
@@ -3165,21 +3474,27 @@ function loadCoinflipGame(container) {
                     
                     <div class="bet-input-group">
                         <label class="bet-label">Choose Side</label>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                            <button class="btn-primary" onclick="flipCoin('heads')" style="background: linear-gradient(135deg, #7cc7ff, #38bdf8); color: #04131f;">
-                                <div style="font-size: 32px;">👑</div>
-                                <div>Heads</div>
+                        <div class="coinflip-side-grid">
+                            <button class="coinflip-side-btn is-heads" onclick="flipCoin('heads')" type="button">
+                                <div class="coinflip-side-icon">🙂</div>
+                                <div class="coinflip-side-copy">
+                                    <strong>Heads</strong>
+                                    <span>Face side</span>
+                                </div>
                             </button>
-                            <button class="btn-primary" onclick="flipCoin('tails')" style="background: linear-gradient(135deg, #2563eb, #0f172a); color: #f8fbff;">
-                                <div style="font-size: 32px;">🦅</div>
-                                <div>Tails</div>
+                            <button class="coinflip-side-btn is-tails" onclick="flipCoin('tails')" type="button">
+                                <div class="coinflip-side-icon">🪶</div>
+                                <div class="coinflip-side-copy">
+                                    <strong>Tails</strong>
+                                    <span>Crest side</span>
+                                </div>
                             </button>
                         </div>
                     </div>
                     
                     <div style="background: var(--bg-primary); padding: 16px; border-radius: 12px; margin-top: 16px; text-align: center;">
                         <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">WIN MULTIPLIER</div>
-                        <div style="font-size: 32px; font-weight: 900; color: var(--accent-success);">1.78x</div>
+                        <div style="font-size: 32px; font-weight: 900; color: var(--accent-success);">2.00x</div>
                     </div>
                 </div>
             </div>
@@ -3227,21 +3542,31 @@ async function flipCoin(choice) {
     
     const coin = document.getElementById('coinDisplay');
     const result = document.getElementById('coinResult');
+    const sidePill = document.getElementById('coinSidePill');
     
     result.textContent = 'Flipping...';
+    if (sidePill) {
+        sidePill.textContent = choice === 'heads' ? 'Heads called' : 'Tails called';
+    }
     
     // Flip animation
     let flips = 0;
     const flipInterval = setInterval(async () => {
         coin.style.transform = `rotateY(${flips * 180}deg)`;
-        coin.textContent = flips % 2 === 0 ? '👑' : '🦅';
+        coin.textContent = '🪙';
+        if (sidePill) {
+            sidePill.textContent = flips % 2 === 0 ? 'Heads side' : 'Tails side';
+        }
         flips++;
         
         if (flips >= 10) {
             clearInterval(flipInterval);
             
             const outcome = isBetaMode ? (Math.random() < 0.5 ? 'heads' : 'tails') : liveResult.resultSide;
-            coin.textContent = outcome === 'heads' ? '👑' : '🦅';
+            coin.textContent = '🪙';
+            if (sidePill) {
+                sidePill.textContent = outcome === 'heads' ? 'Heads landed' : 'Tails landed';
+            }
             
             if (outcome === choice) {
                 const winAmount = isBetaMode ? amount * COINFLIP_PAYOUT : Number(liveResult.payout || 0);
@@ -4285,7 +4610,7 @@ function renderSportsbookSummary() {
                     <strong>${market.odds.toFixed(2)}x</strong>
                 </div>
                 <div class="sportsbook-mini-card">
-                    <span>Start</span>
+                    <span>Sim Status</span>
                     <strong>${fixture.start}</strong>
                 </div>
             </div>
@@ -4334,9 +4659,9 @@ function renderSportsbookResult(payload = null) {
     if (!payload || !payload.sportsbook) {
         result.innerHTML = `
             <div class="sportsbook-result-card">
-                <span class="sportsbook-result-kicker">Slip Ready</span>
-                <strong>Select a market, enter a stake, and send it.</strong>
-                <p>Single tickets only for now. Every outcome lands in your wallet and live feed instantly.</p>
+                <span class="sportsbook-result-kicker">Bot Sim Ready</span>
+                <strong>Select a market, enter a stake, and run the sim.</strong>
+                <p>These are server-resolved bot matchups, so the ticket, wallet, and live feed all stay in sync.</p>
             </div>
         `;
         return;
@@ -4429,7 +4754,7 @@ function loadSportsGame(container) {
                 <aside class="sportsbook-slip">
                     <div class="sportsbook-slip-header">
                         <span class="sportsbook-slip-kicker">Bet Slip</span>
-                        <strong>Single Ticket</strong>
+                        <strong>Single Sim Ticket</strong>
                     </div>
 
                     <div class="sportsbook-selection" id="sportsbookSelection"></div>
@@ -4458,11 +4783,11 @@ function loadSportsGame(container) {
                     </div>
 
                     <button id="sportsbookPlaceBet" class="btn-primary" type="button">
-                        <i class="fas fa-ticket"></i> Lock Ticket
+                        <i class="fas fa-ticket"></i> Run Sim
                     </button>
 
                     <div class="sportsbook-note">
-                        Markets resolve on the server so the slip, wallet, and live feed stay in sync.
+                        Bot sports resolve on the server so the slip, wallet, and live feed stay in sync.
                     </div>
 
                     <div id="sportsbookResult" class="sportsbook-result"></div>
